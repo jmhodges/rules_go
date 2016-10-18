@@ -574,7 +574,7 @@ go_proto_library(name, srcs, deps, has_services)
         <code>List of labels, optional</code>
         <p>List of other go_proto_library(s) to depend on.  
         Note: this also works if the label is a go_library,
-        and there is a filegroup {name}+"_protos" (used for golang protobuf)</p>
+        and there is a filegroup {name}+"_protos" (which is used for golang protobuf)</p>
       </td>
     </tr>
     <tr>

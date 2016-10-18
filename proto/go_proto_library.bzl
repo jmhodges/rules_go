@@ -225,7 +225,7 @@ def go_proto_repositories(shared = 1):
     native.git_repository(
         name = "com_github_google_protobuf",
         remote = "https://github.com/google/protobuf",
-        commit = "4f032cd9affcff0747f5987dfdc0a04deee7a46b",
+        commit = "008b5a228b37c054f46ba478ccafa5e855cb16db",
     )
 
   # Needed for gRPC, only loaded by bazel if used
