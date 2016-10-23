@@ -103,24 +103,11 @@ func (g *generator) Generate(rel string, pkg *build.Package) ([]*bzl.Rule, error
 	}
 
 	library := defaultLibName
-	if len(pkg.GoFiles) != 0 {
-		r, err := g.generateLib(rel, library, pkg, cgoLibrary)
-		if err != nil {
-			return nil, err
-		}
-		rules = append(rules, r)
-	} else if len(cgoLibrary) != 0 {
-		visibility := checkInternalVisibility(rel, "//visibility:public")
-		r, err := newRule("alias", nil, []keyvalue{
-			{key: "name", value: library},
-			{key: "actual", value: "cgo_default_library"},
-			{key: "visibility", value: []string{visibility}},
-		})
-		if err != nil {
-			return nil, err
-		}
-		rules = append(rules, r)
+	r, err := g.generateLib(rel, library, pkg, cgoLibrary)
+	if err != nil {
+		return nil, err
 	}
+	rules = append(rules, r)
 
 	if pkg.IsCommand() {
 		r, err := g.generateBin(rel, library, pkg)
@@ -190,7 +177,11 @@ func (g *generator) generateLib(rel, name string, pkg *build.Package, cgoName st
 		srcs = append(srcs, pkg.SFiles...)
 		attrs = append(attrs, keyvalue{key: "srcs", value: srcs})
 	} else {
-		attrs = append(attrs, keyvalue{key: "srcs", value: pkg.GoFiles})
+		// go_library gets mad when an empty slice is passed in, but handles not
+		// being set at all just fine when "library" is set.
+		if len(pkg.GoFiles) != 0 {
+			attrs = append(attrs, keyvalue{key: "srcs", value: pkg.GoFiles})
+		}
 		attrs = append(attrs, keyvalue{key: "library", value: ":" + cgoName})
 	}
 
@@ -213,12 +204,6 @@ func (g *generator) generateLib(rel, name string, pkg *build.Package, cgoName st
 func (g *generator) generateCgoCLib(rel, name string, pkg *build.Package) (*bzl.Rule, error) {
 	kind := "cgo_library"
 
-	visibility := "//visibility:public"
-	// Libraries made for a go_binary should not be exposed to the public.
-	if pkg.IsCommand() {
-		visibility = "//visibility:private"
-	}
-
 	attrs := []keyvalue{
 		{key: "name", value: name},
 	}
@@ -230,6 +215,7 @@ func (g *generator) generateCgoCLib(rel, name string, pkg *build.Package) (*bzl.
 	srcs = append(srcs, pkg.SFiles...)
 	attrs = append(attrs, keyvalue{key: "srcs", value: srcs})
 
+	visibility := "//visibility:private"
 	visibility = checkInternalVisibility(rel, visibility)
 	attrs = append(attrs, keyvalue{key: "visibility", value: []string{visibility}})
 

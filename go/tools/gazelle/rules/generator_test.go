@@ -157,7 +157,7 @@ func TestGenerator(t *testing.T) {
 						"foo.h",
 						"asm.S",
 					],
-					visibility = ["//visibility:public"],
+					visibility = ["//visibility:private"],
 					deps = [
 						"//lib:go_default_library",
 						"//lib/deep:go_default_library",
