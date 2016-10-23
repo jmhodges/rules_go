@@ -177,7 +177,33 @@ func TestGenerator(t *testing.T) {
 
 				go_test(
 					name = "go_default_test",
-					srcs = ["pure_test.go"],
+					srcs = ["foo_test.go"],
+					library = ":go_default_library",
+				)
+			`},
+		{
+			dir: "allcgolib",
+			want: `
+				cgo_library(
+					name = "cgo_default_library",
+					srcs = [
+						"foo.go",
+						"foo.c",
+					],
+					visibility = ["//visibility:private"],
+					deps = ["//lib:go_default_library"],
+				)
+
+				go_library(
+					name = "go_default_library",
+					library = ":cgo_default_library",
+					visibility = ["//visibility:public"],
+					deps = ["//lib:go_default_library"],
+				)
+
+				go_test(
+					name = "go_default_test",
+					srcs = ["foo_test.go"],
 					library = ":go_default_library",
 				)
 			`},
