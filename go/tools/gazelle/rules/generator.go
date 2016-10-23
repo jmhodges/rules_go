@@ -173,7 +173,6 @@ func (g *generator) generateLib(rel, name string, pkg *build.Package, cgoName st
 
 	if len(cgoName) == 0 {
 		srcs := append([]string{}, pkg.GoFiles...)
-		fmt.Println("generateLib 20", rel, pkg)
 		srcs = append(srcs, pkg.SFiles...)
 		attrs = append(attrs, keyvalue{key: "srcs", value: srcs})
 	} else {

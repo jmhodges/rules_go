@@ -47,7 +47,6 @@ func packageFromDir(t *testing.T, dir string) *build.Package {
 	if err != nil {
 		t.Fatalf("build.ImportDir(%q, build.ImportComment) failed with %v; want success", dir, err)
 	}
-	t.Logf("uhh %#v", pkg.CFiles)
 	return pkg
 }
 
@@ -148,7 +147,7 @@ func TestGenerator(t *testing.T) {
 			`,
 		},
 		{
-			dir: "cgolib", // FIXME rename this
+			dir: "cgolib",
 			want: `
 				cgo_library(
 					name = "cgo_default_library",
@@ -164,7 +163,7 @@ func TestGenerator(t *testing.T) {
 						"//lib/deep:go_default_library",
 					],
 				)
-						
+
 				go_library(
 					name = "go_default_library",
 					srcs = ["pure.go"],
