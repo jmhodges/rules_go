@@ -91,16 +91,36 @@ func (g *generator) Generate(rel string, pkg *build.Package) ([]*bzl.Rule, error
 		rules = append(rules, p)
 	}
 
-	libName := defaultLibName
-
-	r, err := g.generateLib(rel, defaultLibName, pkg)
-	if err != nil {
-		return nil, err
+	cgoLibrary := ""
+	if len(pkg.CgoFiles) != 0 || len(pkg.CFiles) != 0 || len(pkg.HFiles) != 0 {
+		cgoLibrary = "cgo_default_library"
+		r, err := g.generateCgoCLib(rel, cgoLibrary, pkg)
+		if err != nil {
+			return nil, err
+		}
+		rules = append(rules, r)
 	}
-	rules = append(rules, r)
+
+	library := defaultLibName
+	if len(pkg.GoFiles) != 0 {
+		r, err := g.generateLib(rel, library, pkg, cgoLibrary)
+		if err != nil {
+			return nil, err
+		}
+		rules = append(rules, r)
+	} else if len(cgoLibrary) != 0 {
+		r, err := newRule("alias", nil, []keyvalue{
+			{key: "name", value: library},
+			{key: "actual", value: "cgo_default_library"},
+		})
+		if err != nil {
+			return nil, err
+		}
+		rules = append(rules, r)
+	}
 
 	if pkg.IsCommand() {
-		r, err := g.generateBin(rel, libName, pkg)
+		r, err := g.generateBin(rel, library, pkg)
 		if err != nil {
 			return nil, err
 		}
@@ -116,7 +136,7 @@ func (g *generator) Generate(rel string, pkg *build.Package) ([]*bzl.Rule, error
 	}
 
 	if len(pkg.TestGoFiles) > 0 {
-		t, err := g.generateTest(rel, pkg, r.AttrString("name"))
+		t, err := g.generateTest(rel, pkg, library)
 		if err != nil {
 			return nil, err
 		}
@@ -124,7 +144,7 @@ func (g *generator) Generate(rel string, pkg *build.Package) ([]*bzl.Rule, error
 	}
 
 	if len(pkg.XTestGoFiles) > 0 {
-		t, err := g.generateXTest(rel, pkg, r.AttrString("name"))
+		t, err := g.generateXTest(rel, pkg, library)
 		if err != nil {
 			return nil, err
 		}
@@ -149,7 +169,7 @@ func (g *generator) generateBin(rel, library string, pkg *build.Package) (*bzl.R
 
 }
 
-func (g *generator) generateLib(rel, name string, pkg *build.Package) (*bzl.Rule, error) {
+func (g *generator) generateLib(rel, name string, pkg *build.Package, cgoName string) (*bzl.Rule, error) {
 	kind := "go_library"
 
 	visibility := "//visibility:public"
@@ -157,18 +177,64 @@ func (g *generator) generateLib(rel, name string, pkg *build.Package) (*bzl.Rule
 	if pkg.IsCommand() {
 		visibility = "//visibility:private"
 	}
-	visibility = checkInternalVisibility(rel, visibility)
 
 	attrs := []keyvalue{
 		{key: "name", value: name},
-		{key: "srcs", value: append(pkg.GoFiles, pkg.SFiles...)},
-		{key: "visibility", value: []string{visibility}},
 	}
+
+	if len(cgoName) == 0 {
+		srcs := append([]string{}, pkg.GoFiles...)
+		srcs = append(srcs, pkg.SFiles...)
+		attrs = append(attrs, keyvalue{key: "srcs", value: srcs})
+	} else {
+		attrs = append(attrs, keyvalue{key: "srcs", value: pkg.GoFiles})
+		attrs = append(attrs, keyvalue{key: "library", value: ":" + cgoName})
+	}
+
+	visibility = checkInternalVisibility(rel, visibility)
+	attrs = append(attrs, keyvalue{key: "visibility", value: []string{visibility}})
 
 	deps, err := g.dependencies(pkg.Imports, rel)
 	if err != nil {
 		return nil, err
 	}
+
+	if len(deps) > 0 {
+		attrs = append(attrs, keyvalue{key: "deps", value: deps})
+	}
+
+	return newRule(kind, nil, attrs)
+}
+
+// Generates a cgo_library rule for C/C++ code.
+func (g *generator) generateCgoCLib(rel, name string, pkg *build.Package) (*bzl.Rule, error) {
+	kind := "cgo_library"
+
+	visibility := "//visibility:public"
+	// Libraries made for a go_binary should not be exposed to the public.
+	if pkg.IsCommand() {
+		visibility = "//visibility:private"
+	}
+
+	attrs := []keyvalue{
+		{key: "name", value: name},
+	}
+
+	srcs := append([]string{}, pkg.CgoFiles...)
+	srcs = append(srcs, pkg.CFiles...)
+	srcs = append(srcs, pkg.CXXFiles...)
+	srcs = append(srcs, pkg.HFiles...)
+	srcs = append(srcs, pkg.SFiles...)
+	attrs = append(attrs, keyvalue{key: "srcs", value: srcs})
+
+	visibility = checkInternalVisibility(rel, visibility)
+	attrs = append(attrs, keyvalue{key: "visibility", value: []string{visibility}})
+
+	deps, err := g.dependencies(pkg.Imports, rel)
+	if err != nil {
+		return nil, err
+	}
+
 	if len(deps) > 0 {
 		attrs = append(attrs, keyvalue{key: "deps", value: deps})
 	}
