@@ -108,6 +108,23 @@ func TestGenerator(t *testing.T) {
 					},
 				},
 			},
+			"allcgolib": {
+				{
+					Call: &bzl.CallExpr{
+						X: &bzl.LiteralExpr{Token: "cgo_library"},
+					},
+				},
+				{
+					Call: &bzl.CallExpr{
+						X: &bzl.LiteralExpr{Token: "go_library"},
+					},
+				},
+				{
+					Call: &bzl.CallExpr{
+						X: &bzl.LiteralExpr{Token: "go_test"},
+					},
+				},
+			},
 		},
 	}
 
@@ -180,6 +197,15 @@ func TestGenerator(t *testing.T) {
 		},
 		{
 			Path: "cgolib/BUILD",
+			Stmt: []bzl.Expr{
+				loadExpr("go_library", "go_test", "cgo_library"),
+				stub.fixtures["cgolib"][0].Call,
+				stub.fixtures["cgolib"][1].Call,
+				stub.fixtures["cgolib"][2].Call,
+			},
+		},
+		{
+			Path: "allcgolib/BUILD",
 			Stmt: []bzl.Expr{
 				loadExpr("go_library", "go_test", "cgo_library"),
 				stub.fixtures["cgolib"][0].Call,
