@@ -47,6 +47,7 @@ func packageFromDir(t *testing.T, dir string) *build.Package {
 	if err != nil {
 		t.Fatalf("build.ImportDir(%q, build.ImportComment) failed with %v; want success", dir, err)
 	}
+	t.Logf("uhh %#v", pkg.CFiles)
 	return pkg
 }
 
@@ -146,6 +147,41 @@ func TestGenerator(t *testing.T) {
 				)
 			`,
 		},
+		{
+			dir: "cgolib", // FIXME rename this
+			want: `
+				cgo_library(
+					name = "cgo_default_library",
+					srcs = [
+						"foo.go",
+						"foo.c",
+						"foo.h",
+						"asm.S",
+					],
+					visibility = ["//visibility:public"],
+					deps = [
+						"//lib:go_default_library",
+						"//lib/deep:go_default_library",
+					],
+				)
+						
+				go_library(
+					name = "go_default_library",
+					srcs = ["pure.go"],
+					library = ":cgo_default_library",
+					visibility = ["//visibility:public"],
+					deps = [
+						"//lib:go_default_library",
+						"//lib/deep:go_default_library",
+					],
+				)
+
+				go_test(
+					name = "go_default_test",
+					srcs = ["pure_test.go"],
+					library = ":go_default_library",
+				)
+			`},
 	} {
 		pkg := packageFromDir(t, filepath.FromSlash(spec.dir))
 		rules, err := g.Generate(spec.dir, pkg)
