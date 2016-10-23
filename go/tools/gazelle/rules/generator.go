@@ -94,6 +94,7 @@ func (g *generator) Generate(rel string, pkg *build.Package) ([]*bzl.Rule, error
 	cgoLibrary := ""
 	if len(pkg.CgoFiles) != 0 || len(pkg.CFiles) != 0 || len(pkg.HFiles) != 0 {
 		cgoLibrary = "cgo_default_library"
+		//		FIXME test with allcgo
 		r, err := g.generateCgoCLib(rel, cgoLibrary, pkg)
 		if err != nil {
 			return nil, err
@@ -109,9 +110,11 @@ func (g *generator) Generate(rel string, pkg *build.Package) ([]*bzl.Rule, error
 		}
 		rules = append(rules, r)
 	} else if len(cgoLibrary) != 0 {
+		visibility := checkInternalVisibility(rel, "//visibility:public")
 		r, err := newRule("alias", nil, []keyvalue{
 			{key: "name", value: library},
 			{key: "actual", value: "cgo_default_library"},
+			{key: "visibility", value: []string{visibility}},
 		})
 		if err != nil {
 			return nil, err
