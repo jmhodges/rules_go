@@ -92,9 +92,9 @@ func (g *generator) Generate(rel string, pkg *build.Package) ([]*bzl.Rule, error
 	}
 
 	cgoLibrary := ""
-	if len(pkg.CgoFiles) != 0 {
+	if len(pkg.CgoFiles) != 0 || len(pkg.CFiles) != 0 || len(pkg.HFiles) != 0 {
 		cgoLibrary = "cgo_default_library"
-		r, err := g.generateCgoLib(rel, cgoLibrary, pkg)
+		r, err := g.generateCgoCLib(rel, cgoLibrary, pkg)
 		if err != nil {
 			return nil, err
 		}
@@ -102,11 +102,22 @@ func (g *generator) Generate(rel string, pkg *build.Package) ([]*bzl.Rule, error
 	}
 
 	library := defaultLibName
-	r, err := g.generateLib(rel, library, pkg, cgoLibrary)
-	if err != nil {
-		return nil, err
+	if len(pkg.GoFiles) != 0 {
+		r, err := g.generateLib(rel, library, pkg, cgoLibrary)
+		if err != nil {
+			return nil, err
+		}
+		rules = append(rules, r)
+	} else if len(cgoLibrary) != 0 {
+		r, err := newRule("alias", nil, []keyvalue{
+			{key: "name", value: library},
+			{key: "actual", value: "cgo_default_library"},
+		})
+		if err != nil {
+			return nil, err
+		}
+		rules = append(rules, r)
 	}
-	rules = append(rules, r)
 
 	if pkg.IsCommand() {
 		r, err := g.generateBin(rel, library, pkg)
@@ -125,7 +136,7 @@ func (g *generator) Generate(rel string, pkg *build.Package) ([]*bzl.Rule, error
 	}
 
 	if len(pkg.TestGoFiles) > 0 {
-		t, err := g.generateTest(rel, pkg, r.AttrString("name"))
+		t, err := g.generateTest(rel, pkg, library)
 		if err != nil {
 			return nil, err
 		}
@@ -133,7 +144,7 @@ func (g *generator) Generate(rel string, pkg *build.Package) ([]*bzl.Rule, error
 	}
 
 	if len(pkg.XTestGoFiles) > 0 {
-		t, err := g.generateXTest(rel, pkg, r.AttrString("name"))
+		t, err := g.generateXTest(rel, pkg, library)
 		if err != nil {
 			return nil, err
 		}
@@ -195,7 +206,8 @@ func (g *generator) generateLib(rel, name string, pkg *build.Package, cgoName st
 	return newRule(kind, nil, attrs)
 }
 
-func (g *generator) generateCgoLib(rel, name string, pkg *build.Package) (*bzl.Rule, error) {
+// Generates a cgo_library rule for C/C++ code.
+func (g *generator) generateCgoCLib(rel, name string, pkg *build.Package) (*bzl.Rule, error) {
 	kind := "cgo_library"
 
 	visibility := "//visibility:public"
