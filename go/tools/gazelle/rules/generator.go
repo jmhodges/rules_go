@@ -92,8 +92,7 @@ func (g *generator) Generate(rel string, pkg *build.Package) ([]*bzl.Rule, error
 	}
 
 	libName := defaultLibName
-
-	r, err := g.generateLib(rel, defaultLibName, pkg)
+	r, err := g.generateLib(rel, libName, pkg)
 	if err != nil {
 		return nil, err
 	}
