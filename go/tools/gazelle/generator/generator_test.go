@@ -91,6 +91,23 @@ func TestGenerator(t *testing.T) {
 					},
 				},
 			},
+			"cgolib": {
+				{
+					Call: &bzl.CallExpr{
+						X: &bzl.LiteralExpr{Token: "cgo_library"},
+					},
+				},
+				{
+					Call: &bzl.CallExpr{
+						X: &bzl.LiteralExpr{Token: "go_library"},
+					},
+				},
+				{
+					Call: &bzl.CallExpr{
+						X: &bzl.LiteralExpr{Token: "go_test"},
+					},
+				},
+			},
 		},
 	}
 
@@ -161,11 +178,20 @@ func TestGenerator(t *testing.T) {
 				stub.fixtures["bin_with_tests"][2].Call,
 			},
 		},
+		{
+			Path: "cgolib/BUILD",
+			Stmt: []bzl.Expr{
+				loadExpr("go_library", "go_test", "cgo_library"),
+				stub.fixtures["cgolib"][0].Call,
+				stub.fixtures["cgolib"][1].Call,
+				stub.fixtures["cgolib"][2].Call,
+			},
+		},
 	}
 	sort.Sort(fileSlice(want))
 
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("g.Generate(%q) = %s; want %s", repo, prettyFiles(got), prettyFiles(want))
+		t.Errorf("g.Generate(%q) = %s;\n\nwant:\n%s", repo, prettyFiles(got), prettyFiles(want))
 	}
 }
 
@@ -174,9 +200,9 @@ type prettyFiles []*bzl.File
 func (p prettyFiles) String() string {
 	var items []string
 	for _, f := range p {
-		items = append(items, fmt.Sprintf("{Path: %q, Stmt: %s}", f.Path, string(bzl.Format(f))))
+		items = append(items, fmt.Sprintf("\t{Path: %q, Stmt: %s}", f.Path, string(bzl.Format(f))))
 	}
-	return fmt.Sprintf("[%s]", strings.Join(items, ","))
+	return fmt.Sprintf("[\n%s\n]", strings.Join(items, ",\n"))
 }
 
 type fileSlice []*bzl.File
