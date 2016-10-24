@@ -1,7 +1,7 @@
-load("//go:def.bzl", "go_binary", "new_go_repository")
+load("//go:def.bzl", "go_test", "new_go_repository")
 
 go_test(
-    name = "math_test",
+    name = "buildless_external",
     srcs = [
         "main_test.go",
     ],

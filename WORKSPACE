@@ -18,8 +18,8 @@ new_go_repository(
 
 # Self-dependency for the examples/buildless_external example
 new_go_repository(
-    name = "com_github_bazelbuild_rulesgo",
-    importpath = "github.com/bazelbuild/rules_go",
+    name = "io_bazel_rules_go",
+    importpath = "github.com/jmhodges/rules_go",
     commit = "4ed73f44a60f1bf96832702d67521e96dde67025",
 )
 
