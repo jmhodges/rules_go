@@ -15,6 +15,8 @@ limitations under the License.
 
 package allcgolib
 
+// #include <stdint.h>
+// int64_t callC();
 import "C"
 
 import (

@@ -18,6 +18,8 @@ package cgolib
 /**
 #cgo CFLAGS: -I/weird/path
 #cgo LDFLAGS: -lweird
+#include <stdint.h>
+int64_t callC();
 **/
 import "C"
 import "fmt"
