@@ -158,7 +158,7 @@ func TestGenerator(t *testing.T) {
 						"asm.S",
 					],
 					copts = ["-I/weird/path"],
-					linkopts = ["-lweird"],
+					clinkopts = ["-lweird"],
 					visibility = ["//visibility:private"],
 					deps = [
 						"//lib:go_default_library",

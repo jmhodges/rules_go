@@ -221,11 +221,10 @@ func (g *generator) generateCgoCLib(rel, name string, pkg *build.Package) (*bzl.
 		attrs = append(attrs, keyvalue{key: "copts", value: copts})
 	}
 	if len(pkg.CgoLDFLAGS) > 0 {
-		attrs = append(attrs, keyvalue{key: "linkopts", value: pkg.CgoLDFLAGS})
+		attrs = append(attrs, keyvalue{key: "clinkopts", value: pkg.CgoLDFLAGS})
 	}
 
-	visibility := "//visibility:private"
-	visibility = checkInternalVisibility(rel, visibility)
+	visibility = checkInternalVisibility(rel, "//visibility:private")
 	attrs = append(attrs, keyvalue{key: "visibility", value: []string{visibility}})
 
 	deps, err := g.dependencies(pkg.Imports, rel)
