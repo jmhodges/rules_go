@@ -25,7 +25,7 @@ import (
 
 func TestMath(t *testing.T) {
 	d := remotecgorepo.Call()
-	if d != 1 {
+	if d != 1.0 {
 		t.Fatalf("math: want 1, got %d", d)
 	}
 }

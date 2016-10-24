@@ -1,11 +1,15 @@
-load("//go:def.bzl", "go_test", "new_go_repository")
+package(
+    default_visibility = ["//visibility:public"],
+)
+
+load("//go:def.bzl", "go_test")
 
 go_test(
-    name = "buildless_external",
+    name = "go_default_test",
     srcs = [
         "main_test.go",
     ],
     deps = [
-        "@com_github_bazelbuild_rulesgo//examples/buildless_external/remotecgorepo:go_default_library",
+        "@com_github_jmhodges_remotecgorepo//:go_default_library",
     ],
 )

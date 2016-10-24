@@ -16,11 +16,11 @@ new_go_repository(
     rules_go_repo_only_for_internal_use = "@",
 )
 
-# Self-dependency for the examples/buildless_external example
+# Dependency just for examples/buildless_external
 new_go_repository(
-    name = "io_bazel_rules_go",
-    importpath = "github.com/jmhodges/rules_go",
-    commit = "4ed73f44a60f1bf96832702d67521e96dde67025",
+    name = "com_github_jmhodges_remotecgorepo",
+    importpath = "github.com/jmhodges/remotecgorepo",
+    commit = "d5f572d8f6156cb51e4d8a08b07473e67c7d6b0d",
 )
 
 go_internal_tools_deps()
