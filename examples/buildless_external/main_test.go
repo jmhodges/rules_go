@@ -18,13 +18,14 @@ limitations under the License.
 package main
 
 import (
-	"flag"
-	"fmt"
+	"testing"
 
 	"github.com/bazelbuild/rules_go/examples/buildless_external/remotecgorepo"
 )
 
-func main() {
-	flag.Parse()
-	fmt.Println("Hello: ", remotecgorepo.Call())
+func TestMath(t *testing.T) {
+	d := remotecgorepo.Call()
+	if d != 1 {
+		t.Fatalf("math: want 1, got %d", d)
+	}
 }
