@@ -16,6 +16,13 @@ new_go_repository(
     rules_go_repo_only_for_internal_use = "@",
 )
 
+# Self-dependency for the examples/buildless_external example
+new_go_repository(
+    name = "com_github_bazelbuild_rulesgo",
+    importpath = "github.com/bazelbuild/rules_go",
+    commit = "f3eaef0e2fda0cf62d0bf3a7aca76dfcd123fa3d",
+)
+
 go_internal_tools_deps()
 
 # Protocol buffers
