@@ -214,6 +214,16 @@ func (g *generator) generateCgoCLib(rel, name string, pkg *build.Package) (*bzl.
 	srcs = append(srcs, pkg.SFiles...)
 	attrs = append(attrs, keyvalue{key: "srcs", value: srcs})
 
+	copts := append([]string{}, pkg.CgoCFLAGS...)
+	copts = append(copts, pkg.CgoCPPFLAGS...)
+	copts = append(copts, pkg.CgoCXXFLAGS...)
+	if len(copts) > 0 {
+		attrs = append(attrs, keyvalue{key: "copts", value: copts})
+	}
+	if len(pkg.CgoLDFLAGS) > 0 {
+		attrs = append(attrs, keyvalue{key: "linkopts", value: pkg.CgoLDFLAGS})
+	}
+
 	visibility := "//visibility:private"
 	visibility = checkInternalVisibility(rel, visibility)
 	attrs = append(attrs, keyvalue{key: "visibility", value: []string{visibility}})

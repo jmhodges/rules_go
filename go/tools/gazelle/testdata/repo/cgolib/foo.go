@@ -15,6 +15,10 @@ limitations under the License.
 
 package cgolib
 
+/**
+#cgo CFLAGS: -I/weird/path
+#cgo LDFLAGS: -lweird
+**/
 import "C"
 import "fmt"
 
