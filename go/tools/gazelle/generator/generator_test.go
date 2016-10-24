@@ -125,23 +125,6 @@ func TestGenerator(t *testing.T) {
 					},
 				},
 			},
-			"bin_with_tests": {
-				{
-					Call: &bzl.CallExpr{
-						X: &bzl.LiteralExpr{Token: "go_library"},
-					},
-				},
-				{
-					Call: &bzl.CallExpr{
-						X: &bzl.LiteralExpr{Token: "go_binary"},
-					},
-				},
-				{
-					Call: &bzl.CallExpr{
-						X: &bzl.LiteralExpr{Token: "go_test"},
-					},
-				},
-			},
 		},
 	}
 
