@@ -937,6 +937,7 @@ def cgo_library(name, srcs,
       copts = copts + [
           "-I", pkg_dir,
           "-I", "$(GENDIR)/" + pkg_dir + "/" + cgogen.outdir,
+          "-pthread",
           # The generated thunks often contain unused variables.
           "-Wno-unused-variable",
       ],
