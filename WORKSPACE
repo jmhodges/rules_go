@@ -20,7 +20,7 @@ new_go_repository(
 new_go_repository(
     name = "com_github_bazelbuild_rulesgo",
     importpath = "github.com/bazelbuild/rules_go",
-    commit = "f3eaef0e2fda0cf62d0bf3a7aca76dfcd123fa3d",
+    commit = "4ed73f44a60f1bf96832702d67521e96dde67025",
 )
 
 go_internal_tools_deps()
