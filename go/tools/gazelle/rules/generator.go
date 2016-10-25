@@ -183,8 +183,8 @@ func (g *generator) generateLib(rel, name string, pkg *build.Package, cgoName st
 		}
 		attrs = append(attrs, keyvalue{key: "library", value: ":" + cgoName})
 	}
-
 	visibility = checkInternalVisibility(rel, visibility)
+
 	attrs = append(attrs, keyvalue{key: "visibility", value: []string{visibility}})
 
 	deps, err := g.dependencies(pkg.Imports, rel)
@@ -214,8 +214,17 @@ func (g *generator) generateCgoCLib(rel, name string, pkg *build.Package) (*bzl.
 	srcs = append(srcs, pkg.SFiles...)
 	attrs = append(attrs, keyvalue{key: "srcs", value: srcs})
 
-	visibility := "//visibility:private"
-	visibility = checkInternalVisibility(rel, visibility)
+	copts := append([]string{}, pkg.CgoCFLAGS...)
+	copts = append(copts, pkg.CgoCPPFLAGS...)
+	copts = append(copts, pkg.CgoCXXFLAGS...)
+	if len(copts) > 0 {
+		attrs = append(attrs, keyvalue{key: "copts", value: copts})
+	}
+	if len(pkg.CgoLDFLAGS) > 0 {
+		attrs = append(attrs, keyvalue{key: "clinkopts", value: pkg.CgoLDFLAGS})
+	}
+
+	visibility := checkInternalVisibility(rel, "//visibility:private")
 	attrs = append(attrs, keyvalue{key: "visibility", value: []string{visibility}})
 
 	deps, err := g.dependencies(pkg.Imports, rel)
