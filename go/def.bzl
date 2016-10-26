@@ -934,6 +934,7 @@ def cgo_library(name, srcs,
       name = cgogen.outdir + "/_cgo_lib",
       srcs = cgogen.c_thunks + cgogen.c_exports + c_srcs + c_hdrs,
       deps = cdeps,
+      # TODO(bazel-team): use -mthreads when windows support is added
       copts = copts + [
           "-I", pkg_dir,
           "-I", "$(GENDIR)/" + pkg_dir + "/" + cgogen.outdir,
