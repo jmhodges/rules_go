@@ -18,6 +18,7 @@ package rules
 import (
 	"fmt"
 	"go/build"
+	"log"
 	"path"
 	"path/filepath"
 	"strings"
@@ -207,6 +208,16 @@ func (g *generator) generateCgoCLib(rel, name string, pkg *build.Package) (*bzl.
 
 	attrs := []keyvalue{
 		{key: "name", value: name},
+	}
+
+	if len(pkg.MFiles) != 0 {
+		log.Printf("warning: %s has Objective-C files but rules_go does not yet support Objective-C", rel)
+	}
+	if len(pkg.FFiles) != 0 {
+		log.Printf("warning: %s has Fortran files but rules_go does not yet support Fortran", rel)
+	}
+	if len(pkg.SwigFiles) != 0 || len(pkg.SwigCXXFiles) != 0 {
+		log.Printf("warning: %s has SWIG files but rules_go does not yet support Fortran", rel)
 	}
 
 	srcs := append([]string{}, pkg.CgoFiles...)
