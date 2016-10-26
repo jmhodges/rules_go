@@ -39,6 +39,9 @@ const (
 	// defaultProtosName is the name of a filegroup created
 	// whenever the library contains .pb.go files
 	defaultProtosName = "go_default_library_protos"
+	// defaultCgoName is the naem of the default cgo_library rule in a GO
+	// package directory.
+	defaultCgoLibName = "cgo_default_library"
 )
 
 // Generator generates Bazel build rules for Go build targets
@@ -92,8 +95,8 @@ func (g *generator) Generate(rel string, pkg *build.Package) ([]*bzl.Rule, error
 	}
 
 	cgoLibrary := ""
-	if len(pkg.CgoFiles) != 0 || len(pkg.CFiles) != 0 || len(pkg.HFiles) != 0 {
-		cgoLibrary = "cgo_default_library"
+	if len(pkg.CgoFiles) != 0 {
+		cgoLibrary = defaultCgoLibName
 		r, err := g.generateCgoCLib(rel, cgoLibrary, pkg)
 		if err != nil {
 			return nil, err
@@ -171,7 +174,7 @@ func (g *generator) generateLib(rel, name string, pkg *build.Package, cgoName st
 		{key: "name", value: name},
 	}
 
-	if len(cgoName) == 0 {
+	if cgoName == "" {
 		srcs := append([]string{}, pkg.GoFiles...)
 		srcs = append(srcs, pkg.SFiles...)
 		attrs = append(attrs, keyvalue{key: "srcs", value: srcs})
@@ -191,7 +194,6 @@ func (g *generator) generateLib(rel, name string, pkg *build.Package, cgoName st
 	if err != nil {
 		return nil, err
 	}
-
 	if len(deps) > 0 {
 		attrs = append(attrs, keyvalue{key: "deps", value: deps})
 	}
@@ -231,7 +233,6 @@ func (g *generator) generateCgoCLib(rel, name string, pkg *build.Package) (*bzl.
 	if err != nil {
 		return nil, err
 	}
-
 	if len(deps) > 0 {
 		attrs = append(attrs, keyvalue{key: "deps", value: deps})
 	}
