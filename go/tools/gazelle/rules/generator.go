@@ -40,8 +40,7 @@ const (
 	// defaultProtosName is the name of a filegroup created
 	// whenever the library contains .pb.go files
 	defaultProtosName = "go_default_library_protos"
-	// defaultCgoName is the naem of the default cgo_library rule in a GO
-	// package directory.
+	// defaultCgoLibName is the name of the default cgo_library rule in a Go package directory.
 	defaultCgoLibName = "cgo_default_library"
 )
 
@@ -200,7 +199,7 @@ func (g *generator) generateLib(rel, name string, pkg *build.Package, cgoName st
 	return newRule(kind, nil, attrs)
 }
 
-// Generates a cgo_library rule for C/C++ code.
+// generateCgoCLib generates a cgo_library rule for C/C++ code.
 func (g *generator) generateCgoCLib(rel, name string, pkg *build.Package) (*bzl.Rule, error) {
 	kind := "cgo_library"
 
@@ -215,7 +214,7 @@ func (g *generator) generateCgoCLib(rel, name string, pkg *build.Package) (*bzl.
 		log.Printf("warning: %s has Fortran files but rules_go does not yet support Fortran", rel)
 	}
 	if len(pkg.SwigFiles) != 0 || len(pkg.SwigCXXFiles) != 0 {
-		log.Printf("warning: %s has SWIG files but rules_go does not yet support Fortran", rel)
+		log.Printf("warning: %s has SWIG files but rules_go does not yet support SWIG", rel)
 	}
 
 	srcs := append([]string{}, pkg.CgoFiles...)
