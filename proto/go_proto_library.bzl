@@ -107,7 +107,7 @@ def _check_bazel_style(ctx):
         mnemonic="GoProtocGenCp")
   return proto_outs, "/" + ctx.label.name[:-len(_PROTOS_SUFFIX)]
 
-def _go_proto_library_gen_impl(ctx):
+def go_proto_library_gen_impl(ctx):
   """Rule implementation that generates Go using protoc."""
   proto_outs, go_package_name = _check_bazel_style(ctx)
 
@@ -168,7 +168,7 @@ def _go_proto_library_gen_impl(ctx):
   return struct(_protos=protos+srcs,
                 _m_import_path=m_import_path)
 
-_go_proto_library_gen = rule(
+go_proto_library_gen = rule(
     attrs = {
         "deps": attr.label_list(),
         "srcs": attr.label_list(
@@ -200,7 +200,7 @@ _go_proto_library_gen = rule(
         ),
     },
     output_to_genfiles = True,
-    implementation = _go_proto_library_gen_impl,
+    implementation = go_proto_library_gen_impl,
 )
 
 def _add_target_suffix(target, suffix):
@@ -259,7 +259,7 @@ def go_proto_library(name, srcs = None, deps = None,
     outs = [s[:-len(".proto")] + ".pb.go"
             for s in srcs]
 
-  _go_proto_library_gen(
+  go_proto_library_gen(
       name = name + _PROTOS_SUFFIX,
       srcs = srcs,
       deps = [_add_target_suffix(s, _PROTOS_SUFFIX)
