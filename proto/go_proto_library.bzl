@@ -168,7 +168,7 @@ def _go_proto_library_gen_impl(ctx):
   return struct(_protos=protos+srcs,
                 _m_import_path=m_import_path)
 
-_go_proto_library_gen = rule(
+go_proto_library_gen = rule(
     attrs = {
         "deps": attr.label_list(),
         "srcs": attr.label_list(
@@ -268,7 +268,7 @@ def go_proto_library(name, srcs = None, deps = None,
     outs = [s[:-len(".proto")] + ".pb.go"
             for s in srcs]
 
-  _go_proto_library_gen(
+  go_proto_library_gen(
       name = name + _PROTOS_SUFFIX,
       srcs = srcs,
       deps = [_add_target_suffix(s, _PROTOS_SUFFIX)
