@@ -128,7 +128,7 @@ And then in the rule body, you need to get the toolchain itself and use it's act
 .. code:: bzl
 
   def _my_rule_impl(ctx):
-    go_ctx = go_context(ctx)
+    go = go_context(ctx)
 
 
 Customizing
