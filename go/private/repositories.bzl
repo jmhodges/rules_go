@@ -51,9 +51,9 @@ def go_rules_dependencies():
         git_repository,
         name = "bazel_skylib",
         remote = "https://github.com/bazelbuild/bazel-skylib",
-        # 0.8.0, latest as of 2019-07-08
-        commit = "3721d32c14d3639ff94320c780a60a6e658fb033",
-        shallow_since = "1553102012 +0100",
+        # 0.9.0, latest as of 2019-08-29
+        commit = "2b38b2f8bd4b8603d610cfc651fcbb299498147f",
+        shallow_since = "1562957722 -0400",
     )
 
     # Needed for nogo vet checks and go/packages.
