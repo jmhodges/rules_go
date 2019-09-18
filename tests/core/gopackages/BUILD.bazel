@@ -1,0 +1,12 @@
+load("@io_bazel_rules_go//go/tools/bazel_testing:def.bzl", "go_bazel_test")
+
+go_bazel_test(
+    name = "gopackages_test",
+    deps = ["@org_golang_x_tools//go/packages:go_default_library"],
+    srcs = ["gopackages_test.go"],
+    args = [
+        "-goPkgDriverPath",
+        "$(location //go/tools/gopackagesdriver:gopackagesdriver)",
+    ],
+    data = ["//go/tools/gopackagesdriver:gopackagesdriver"],
+)
