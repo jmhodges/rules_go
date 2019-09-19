@@ -212,6 +212,7 @@ func run(args []string) error {
 	pkgs := make(map[string]*packages.Package)
 	roots := make(map[string]bool)
 	for _, target := range targets {
+		// FIXME need to turn relative paths into absolute ones here.
 		panic(fmt.Sprintf("json processing not implemented: %s, %v", target, sortedFiles))
 	}
 
