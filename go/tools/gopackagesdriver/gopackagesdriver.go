@@ -152,24 +152,28 @@ func run(args []string) error {
 		if err := pbuf.DecodeMessage(&event); err != nil {
 			return err
 		}
-
+		log.Println("FIXME message loop 010:", event)
 		if id := event.GetId().GetTargetCompleted(); id != nil {
 			completed := event.GetCompleted()
 			if !completed.GetSuccess() {
 				return fmt.Errorf("%s: target did not build successfully", id.GetLabel())
 			}
+			log.Println("FIXME message loop 050:", id)
 			for _, g := range completed.GetOutputGroup() {
+				log.Println("FIXME message loop 051:", g)
 				for _, s := range g.GetFileSets() {
+					log.Println("FIXME message loop 052:", s)
 					if setId := s.GetId(); setId != "" {
 						rootSets = append(rootSets, setId)
 					}
 				}
 			}
 		}
-
+		log.Println("FIXME message loop 060")
 		if id := event.GetId().GetNamedSet(); id != nil {
 			files := event.GetNamedSetOfFiles().GetFiles()
 			fileNames := make([]string, len(files))
+			log.Println("FIXME message loop 070:", files)
 			for i, f := range files {
 				fileNames[i] = f.GetName()
 			}
@@ -180,10 +184,12 @@ func run(args []string) error {
 				setIds[i] = s.GetId()
 			}
 			setToSets[id.GetId()] = setIds
+			log.Println("FIXME message loop 080:", files)
 			continue
 		}
 	}
-
+	log.Println("FIXME outer 050:", rootSets)
+	log.Println("FIXME outer 051:", setToSets)
 	var visit func(string, map[string]bool, map[string]bool)
 	visit = func(setId string, files map[string]bool, visited map[string]bool) {
 		if visited[setId] {
@@ -212,7 +218,7 @@ func run(args []string) error {
 	pkgs := make(map[string]*packages.Package)
 	roots := make(map[string]bool)
 	for _, target := range targets {
-		panic(fmt.Sprintf("json processing not implemented: %s", target))
+		panic(fmt.Sprintf("json processing not implemented: %s, %v", target, sortedFiles))
 	}
 
 	sortedRoots := make([]string, 0, len(roots))
