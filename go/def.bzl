@@ -45,6 +45,10 @@ load(
     _go_source = "go_source",
 )
 load(
+    "@io_bazel_rules_go//go/private:rules/gopackagesdriver_aspects.bzl",
+    _gopackagesdriver_files_aspect = "gopackagesdriver_files_aspect",
+)
+load(
     "@io_bazel_rules_go//extras:embed_data.bzl",
     _go_embed_data = "go_embed_data",
 )
@@ -117,6 +121,9 @@ go_path = _go_path
         "deps": attr.label_list(providers=[GoLibrary]), # The set of go libraries to include the export
         "mode": attr.string(default="link", values=["link", "copy"]) # Whether to copy files or produce soft links
 """
+
+gopackagesdriver_files = _gopackagesdriver_files_aspect
+""" FIXME write docs """
 
 def go_vet_test(*args, **kwargs):
     fail("The go_vet_test rule has been removed. Please migrate to nogo instead, which supports vet tests.")

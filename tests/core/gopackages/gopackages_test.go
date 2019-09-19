@@ -1,11 +1,13 @@
 package gopackages_test
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel_testing"
 	"golang.org/x/tools/go/packages"
@@ -52,7 +54,13 @@ func Test(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.Setenv("GOPACKAGESDRIVER", driverPath)
-	pkgs, err := packages.Load(nil, "//:hello")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cfg := &packages.Config{
+		Mode:    packages.NeedName | packages.NeedFiles,
+		Context: ctx,
+	}
+	pkgs, err := packages.Load(cfg, "//:hello")
 	if err != nil {
 		t.Fatalf("unable to packages.Load: %s", err)
 	}
