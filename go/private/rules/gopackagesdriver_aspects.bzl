@@ -31,7 +31,7 @@ def _gopackagesdriver_files_aspect_impl(target, ctx):
         return []
     # We have a library and we need to compile it in a new mode
     library = target[GoLibrary]
-    resp = _basic_driver_response(go, target, source, library)
+    resp = _basic_driver_response(target, source, library)
 
     json_serialized = struct(**resp).to_json()
     # FIXME go_binary that embeds a go_library will cause the same contents
