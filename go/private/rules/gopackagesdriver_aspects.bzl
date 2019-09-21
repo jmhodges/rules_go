@@ -62,15 +62,9 @@ def _gopackagesdriver_files_aspect_impl(target, ctx):
         name = pkg_name,
         pkg_path = library.importpath, # FIXME maybe not right? maybe only from
                                        # the other _export aspect?
-        go_files = go_srcs, # FIXME make these absolute paths in the driver
+        go_files = go_srcs,
         other_files = nongo_srcs,
-
-        # FIXME make these absolute paths in the
-        # driver target.label.workspace_root will be an empty string, but we'll
-        # be making it an absolute file path, and it's handy to just have the
-        # string there to add to. And later we might need more roots.
-        # FIXME this turns out to not be right and in gopackagesdriver.go we just use the ID of the package?
-        roots = [target.label.workspace_root],
+        roots = [label_string],
     ).to_json()
 
     # FIXME go_binary that embeds a go_library will cause the same contents

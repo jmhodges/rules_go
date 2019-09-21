@@ -147,6 +147,8 @@ func run(args []string) error {
 	}
 	eventFile.Close()
 
+	// FIXME I'm not sure what the goal of this variable and visit was for, but
+	// I'm sure I'll find out soon.
 	var rootSets []string
 	setToFiles := make(map[string][]string)
 	setToSets := make(map[string][]string)
@@ -163,7 +165,6 @@ func run(args []string) error {
 				return fmt.Errorf("%s: target did not build successfully", id.GetLabel())
 			}
 			for _, g := range completed.GetOutputGroup() {
-				log.Println("FIXME 20 og:", g)
 				for _, s := range g.GetFileSets() {
 					if setId := s.GetId(); setId != "" {
 						rootSets = append(rootSets, setId)
@@ -181,7 +182,6 @@ func run(args []string) error {
 					log.Fatalf("unable to parse file URI %#v: %s", f.GetUri(), err)
 				}
 				if u.Scheme == "file" {
-					log.Println("FIXME 30 ur:", u.Path)
 					fileNames[i] = u.Path
 				} else {
 					log.Fatalf("scheme in bazel output files must be \"file\", but got %#v in URI %#v", u.Scheme, f.GetUri())
@@ -217,20 +217,18 @@ func run(args []string) error {
 		visit(s, files, map[string]bool{})
 	}
 
-	// FIXME Need to handle this de-duping elsewhere
 	pkgs := make(map[string]*packages.Package)
 	roots := make(map[string]bool)
 	for fp, _ := range files {
-		log.Println("FIXME 50 wut fp:", fp)
 		resp, err := parseAspectResponse(fp)
 		if err != nil {
 			log.Fatalf("unable to parse JSON response in file %#v from aspect %#v: %s", fp, aspect, err)
 		}
 		pkg := aspectResponseToPackage(resp, pwd)
 		pkgs[pkg.ID] = pkg
-
-		// FIXME ???? no idea
-		roots[pkg.ID] = true
+		for _, r := range resp.Roots {
+			roots[r] = true
+		}
 	}
 	sortedPkgs := make([]*packages.Package, 0, len(pkgs))
 	for _, pkg := range pkgs {
