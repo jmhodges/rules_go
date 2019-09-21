@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -93,11 +92,13 @@ func TestSinglePkgPattern(t *testing.T) {
 	if pkg.ID != expectedID {
 		t.Errorf("ID: want %#v, got %#v", expectedID, pkg.ID)
 	}
-	expectedGoFiles := []string{"execroot/io_bazel_rules_go/bazel-out/darwin-fastbuild/bin/tests/core/gopackages/darwin_amd64_stripped/gopackages_test.runfiles/io_bazel_rules_go/hello.go"}
-	if compareFiles(expectedGoFiles, pkg.GoFiles) {
-		t.Errorf("GoFiles: want %v, got %v", expectedGoFiles, pkg.GoFiles)
+	expectedGoFiles := []string{"hello.go"}
+	if !compareFiles(expectedGoFiles, pkg.GoFiles) {
+		t.Errorf("GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
 	}
 }
+
+const srcFilePrefix = "/execroot/io_bazel_rules_go/bazel-out/darwin-fastbuild/bin/tests/core/gopackages/darwin_amd64_stripped/gopackages_test.runfiles/io_bazel_rules_go/"
 
 func compareFiles(expected, actual []string) bool {
 	if len(expected) != len(actual) {
@@ -105,15 +106,15 @@ func compareFiles(expected, actual []string) bool {
 	}
 	for i, exp := range expected {
 		act := actual[i]
-		ind := strings.Index(act, "/execroot/")
-		if ind == -1 || exp != act[ind:] {
+		ind := strings.Index(act, srcFilePrefix)
+		if ind == -1 || exp != act[ind+len(srcFilePrefix):] {
 			return false
 		}
 	}
 	return true
 }
 
-func XTestSingleFilePattern(t *testing.T) {
+func TestSingleFilePattern(t *testing.T) {
 	// check we can actually build :goodbye
 	if err := bazel_testing.RunBazel("build", "//:goodbye"); err != nil {
 		t.Fatalf("unable to build //:goodbye normally: %s", err)
@@ -144,9 +145,9 @@ func XTestSingleFilePattern(t *testing.T) {
 	if pkg.ID != expectedID {
 		t.Errorf("ID: want %#v, got %#v", expectedID, pkg.ID)
 	}
-	expectedGoFiles := []string{}
-	if !reflect.DeepEqual(expectedGoFiles, pkg.GoFiles) {
-		t.Errorf("GoFiles: want %v, got %v", expectedGoFiles, pkg.GoFiles)
+	expectedGoFiles := []string{"goodbye.go", "goodbye_other.go"}
+	if !compareFiles(expectedGoFiles, pkg.GoFiles) {
+		t.Errorf("GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
 	}
 }
 
