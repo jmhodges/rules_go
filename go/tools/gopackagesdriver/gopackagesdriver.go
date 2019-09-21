@@ -180,9 +180,9 @@ func (e *StderrExitError) Error() string {
 }
 
 func filePathToLabel(fp string) (string, error) {
-	bs, err := bazelQuery(fp)
+	bs, err := bazelQuery(strings.TrimPrefix(fp, "./"))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error converting filepath %v to bazel file label: %w", fp, err)
 	}
 	return string(bytes.TrimSpace(bs)), nil
 }
@@ -192,22 +192,27 @@ func fileLabelToBazelTargets(label, origFile string) ([]string, error) {
 	if ind == -1 {
 		return nil, fmt.Errorf("no \":\" in file label %#v to be found in bazel targets", label)
 	}
-	packageSplat := label[ind:] + "*"
-	bs, err := bazelQuery(fmt.Sprintf("attr('srcs', %s, %s", label, packageSplat))
+	packageSplat := label[:ind+1] + "*"
+	bs, err := bazelQuery(fmt.Sprintf("attr(\"srcs\", %s, %s)", label, packageSplat))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error bazel file label %#v to bazel target: %w", label, err)
 	}
 	bbs := bytes.Split(bs, []byte{'\n'})
 	if len(bbs) == 0 {
 		return nil, fmt.Errorf("no targets in %#v contains the source file %#v", label[ind+1:], origFile)
 	}
-	targs := make([]string, len(bbs))
-	for i, line := range bbs {
-		targs[i] = string(line)
+	targs := make([]string, 0, len(bbs))
+	for _, line := range bbs {
+		if len(line) == 0 {
+			continue
+		}
+		targs = append(targs, string(line))
 	}
 	return targs, nil
 }
 
+// FIXME make it so we can conditionally print out all of the commands and args we exec to
+// stderr.
 func bazelQuery(args ...string) ([]byte, error) {
 	cmd := exec.Command("bazel", "query")
 	cmd.Args = append(cmd.Args, args...)
