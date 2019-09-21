@@ -31,24 +31,39 @@ go_library(
 	importpath = "fakeimportpath/hello",
 	visibility = ["//visibility:public"],
 )
+
+go_library(
+	name = "goodbye",
+	srcs = ["goodbye.go", "goodbye_other.go"],
+	importpath = "fakeimportpath/goodbye",
+	visibility = ["//visibility:public"],
+)
 -- hello.go --
 package hello
 
 import "fmt"
 
-func A() string { return fmt.Sprintf("A is", 12) }
+func A() string { return fmt.Sprintf("hello is", 12) }
+-- goodbye.go --
+package goodbye
+
+import "fmt"
+
+func B() string { return fmt.Sprintf("goodbye is", 22) }
+-- goodbye_other.go --
+package goodbye
+
+import "fmt"
+
+func C() string { return fmt.Sprintf("goodbye is", 45) }
 `,
 	})
 }
 
 // FIXME rename file to gopackagesdriver_test.go
-func Test(t *testing.T) {
+func TestSinglePkgPattern(t *testing.T) {
 	// check we can actually build :hello
-	args := []string{
-		"build",
-		"//:hello",
-	}
-	if err := bazel_testing.RunBazel(args...); err != nil {
+	if err := bazel_testing.RunBazel("build", "//:hello"); err != nil {
 		t.Fatalf("unable to build //:hello normally: %s", err)
 	}
 	driverPath, err := getDriverPath()
@@ -81,7 +96,43 @@ func Test(t *testing.T) {
 	if reflect.DeepEqual(expectedGoFiles, pkg.GoFiles) {
 		t.Errorf("GoFiles: want %v, got %v", expectedID, pkg.ID)
 	}
+}
 
+func XTestSingleFilePattern(t *testing.T) {
+	// check we can actually build :goodbye
+	if err := bazel_testing.RunBazel("build", "//:goodbye"); err != nil {
+		t.Fatalf("unable to build //:goodbye normally: %s", err)
+	}
+	driverPath, err := getDriverPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Setenv("GOPACKAGESDRIVER", driverPath)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cfg := &packages.Config{
+		Mode:    packages.NeedName | packages.NeedFiles,
+		Context: ctx,
+	}
+	pkgs, err := packages.Load(cfg, "//:goodbye")
+	if err != nil {
+		t.Fatalf("unable to packages.Load: %s", err)
+	}
+	if len(pkgs) < 1 {
+		t.Fatalf("no packages returned")
+	}
+	if len(pkgs) != 1 {
+		t.Errorf("too many packages returned: want 1, got %d", len(pkgs))
+	}
+	pkg := pkgs[0]
+	expectedID := "//:hello"
+	if pkg.ID != expectedID {
+		t.Errorf("ID: want %#v, got %#v", expectedID, pkg.ID)
+	}
+	expectedGoFiles := []string{}
+	if reflect.DeepEqual(expectedGoFiles, pkg.GoFiles) {
+		t.Errorf("GoFiles: want %v, got %v", expectedID, pkg.ID)
+	}
 }
 
 func getDriverPath() (string, error) {
