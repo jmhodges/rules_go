@@ -20,6 +20,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -32,6 +33,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	bespb "github.com/bazelbuild/rules_go/go/tools/gopackagesdriver/proto/build_event_stream"
 	"github.com/golang/protobuf/proto"
@@ -77,6 +79,12 @@ type driverResponse struct {
 	Packages []*packages.Package
 }
 
+const fileQueryPrefix = "file="
+
+var (
+	pwd = os.Getenv("PWD")
+)
+
 func run(args []string) error {
 	// Parse command line arguments and driver request sent on stdin.
 	fs := flag.NewFlagSet("gopackagesdriver", flag.ExitOnError)
@@ -84,6 +92,7 @@ func run(args []string) error {
 		return err
 	}
 	patterns := fs.Args()
+
 	if len(patterns) == 0 {
 		// FIXME double check this. a comment in go/packages's goListDriver
 		// mentions that no patterns at all means to query for ".". I'm not sure
@@ -92,36 +101,153 @@ func run(args []string) error {
 		return errors.New("no patterns specified")
 	}
 
-	pwd := os.Getenv("PWD")
+	var targets, fileQueries []string
+	for _, patt := range patterns {
+		if strings.HasPrefix(patt, fileQueryPrefix) {
+			fp := patt[len(fileQueryPrefix):]
+			if len(fp) == 0 {
+				return fmt.Errorf("\"file=\" prefix given with no query after it")
+			}
+			fileQueries = append(fileQueries, fp)
+		} else {
+			targets = append(targets, patt)
+		}
+	}
 
 	reqData, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
 		return err
 	}
-	var req driverRequest
+	req := &driverRequest{}
 	if err := json.Unmarshal(reqData, &req); err != nil {
 		return fmt.Errorf("could not unmarshal driver request: %v", err)
 	}
+	var resp *driverResponse
+	if len(fileQueries) != 0 {
+		fileTargs, err := bazelTargetsFromFileQueries(req, fileQueries)
+		if err != nil {
+			return err
+		}
+		targets = append(targets, fileTargs...)
+	}
+	if len(targets) != 0 {
+		resp, err = packagesFromBazelTargets(req, targets)
+		if err != nil {
+			return err
+		}
+	}
+	respData, err := json.Marshal(resp)
+	if err != nil {
+		return fmt.Errorf("could not marshal driver response: %v", err)
+	}
+	_, err = os.Stdout.Write(respData)
+	if err != nil {
+		return err
+	}
 
+	return nil
+
+}
+
+func bazelTargetsFromFileQueries(req *driverRequest, fileQueries []string) ([]string, error) {
+	var targets []string
+	for _, fp := range fileQueries {
+		fileLabel, err := filePathToLabel(fp)
+		if err != nil {
+			// FIXME Errors on driverResponse?
+			return nil, err
+		}
+		targs, err := fileLabelToBazelTargets(fileLabel, fp)
+		if err != nil {
+			return nil, err
+		}
+		targets = append(targets, targs...)
+	}
+	return targets, nil
+}
+
+// StderrExitError wraps *exec.ExitError and prints the complete stderr output
+// from a command.
+type StderrExitError struct {
+	Err *exec.ExitError
+}
+
+func (e *StderrExitError) Error() string {
+	sb := &strings.Builder{}
+	sb.Write(e.Err.Stderr)
+	sb.WriteString(e.Err.Error())
+	return sb.String()
+}
+
+func filePathToLabel(fp string) (string, error) {
+	bs, err := bazelQuery(fp)
+	if err != nil {
+		return "", err
+	}
+	return string(bytes.TrimSpace(bs)), nil
+}
+
+func fileLabelToBazelTargets(label, origFile string) ([]string, error) {
+	ind := strings.Index(label, ":")
+	if ind == -1 {
+		return nil, fmt.Errorf("no \":\" in file label %#v to be found in bazel targets", label)
+	}
+	packageSplat := label[ind:] + "*"
+	bs, err := bazelQuery(fmt.Sprintf("attr('srcs', %s, %s", label, packageSplat))
+	if err != nil {
+		return nil, err
+	}
+	bbs := bytes.Split(bs, []byte{'\n'})
+	if len(bbs) == 0 {
+		return nil, fmt.Errorf("no targets in %#v contains the source file %#v", label[ind+1:], origFile)
+	}
+	targs := make([]string, len(bbs))
+	for i, line := range bbs {
+		targs[i] = string(line)
+	}
+	return targs, nil
+}
+
+func bazelQuery(args ...string) ([]byte, error) {
+	cmd := exec.Command("bazel", "query")
+	cmd.Args = append(cmd.Args, args...)
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	err := cmd.Run()
+	if eErr, ok := err.(*exec.ExitError); ok {
+		eErr.Stderr = stderr.Bytes()
+		err = &StderrExitError{Err: eErr}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return stdout.Bytes(), nil
+}
+
+// FIXME only really supports one target
+func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResponse, error) {
 	// Build package data files using bazel. We use one of several aspects
 	// (depending on what mode we're in). The aspect produces .json and source
 	// files in an output group. Each .json file contains a serialized
 	// *packages.Package object.
 	outputGroup := "gopackagesdriver_data"
+	// FIXME allow overriding of the io_bazel_rules_go external name?
 	aspect := "@io_bazel_rules_go//go:def.bzl%"
 	if req.Mode&(packages.NeedCompiledGoFiles|packages.NeedExportsFile) != 0 {
 		aspect += "gopackagesdriver_export"
 	} else if req.Mode&(packages.NeedName|packages.NeedFiles) != 0 {
 		aspect += "gopackagesdriver_files"
 	} else {
-		return fmt.Errorf("unsupported packages.LoadModes set")
+		return nil, fmt.Errorf("unsupported packages.LoadModes set")
 	}
 
 	// We ask bazel to write build event protos to a binary file, which
 	// we read to find the output files.
 	eventFile, err := ioutil.TempFile("", "gopackagesdriver-bazel-bep-*.bin")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	eventFileName := eventFile.Name()
 	defer func() {
@@ -132,7 +258,6 @@ func run(args []string) error {
 	}()
 
 	cmd := exec.Command("bazel", "build")
-	// FIXME allow overriding of the io_bazel_rules_go external name?
 	cmd.Args = append(cmd.Args, "--aspects="+aspect)
 	cmd.Args = append(cmd.Args, "--output_groups="+outputGroup)
 	cmd.Args = append(cmd.Args, "--build_event_binary_file="+eventFile.Name())
@@ -142,19 +267,18 @@ func run(args []string) error {
 	// FIXME once we start handling other query types (like `file=`), not all of
 	// the arguments given us will be bazel targets. go/packages calls these
 	// arguments `patterns`, so we reproduce that here.
-	targets := patterns
 	for _, target := range targets {
 		cmd.Args = append(cmd.Args, target)
 	}
 	cmd.Stdout = os.Stderr // sic
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("error running bazel: %v", err)
+		return nil, fmt.Errorf("error running bazel: %v", err)
 	}
 
 	eventData, err := ioutil.ReadAll(eventFile)
 	if err != nil {
-		return fmt.Errorf("could not read bazel build event file: %v", err)
+		return nil, fmt.Errorf("could not read bazel build event file: %v", err)
 	}
 	eventFile.Close()
 
@@ -167,13 +291,13 @@ func run(args []string) error {
 	var event bespb.BuildEvent
 	for !event.GetLastMessage() {
 		if err := pbuf.DecodeMessage(&event); err != nil {
-			return err
+			return nil, err
 		}
 
 		if id := event.GetId().GetTargetCompleted(); id != nil {
 			completed := event.GetCompleted()
 			if !completed.GetSuccess() {
-				return fmt.Errorf("%s: target did not build successfully", id.GetLabel())
+				return nil, fmt.Errorf("%s: target did not build successfully", id.GetLabel())
 			}
 			for _, g := range completed.GetOutputGroup() {
 				for _, s := range g.GetFileSets() {
@@ -190,12 +314,12 @@ func run(args []string) error {
 			for i, f := range files {
 				u, err := url.Parse(f.GetUri())
 				if err != nil {
-					log.Fatalf("unable to parse file URI %#v: %s", f.GetUri(), err)
+					return nil, fmt.Errorf("unable to parse file URI %#v: %s", f.GetUri(), err)
 				}
 				if u.Scheme == "file" {
 					fileNames[i] = u.Path
 				} else {
-					log.Fatalf("scheme in bazel output files must be \"file\", but got %#v in URI %#v", u.Scheme, f.GetUri())
+					return nil, fmt.Errorf("scheme in bazel output files must be \"file\", but got %#v in URI %#v", u.Scheme, f.GetUri())
 				}
 			}
 			setToFiles[id.GetId()] = fileNames
@@ -233,7 +357,7 @@ func run(args []string) error {
 	for fp, _ := range files {
 		resp, err := parseAspectResponse(fp)
 		if err != nil {
-			log.Fatalf("unable to parse JSON response in file %#v from aspect %#v: %s", fp, aspect, err)
+			return nil, fmt.Errorf("unable to parse JSON response in file %#v from aspect %#v: %s", fp, aspect, err)
 		}
 		pkg := aspectResponseToPackage(resp, pwd)
 		pkgs[pkg.ID] = pkg
@@ -254,21 +378,11 @@ func run(args []string) error {
 		sortedRoots = append(sortedRoots, root)
 	}
 	sort.Strings(sortedRoots)
-	resp := driverResponse{
+	return &driverResponse{
 		Sizes:    nil, // FIXME
 		Roots:    sortedRoots,
 		Packages: sortedPkgs,
-	}
-	respData, err := json.Marshal(resp)
-	if err != nil {
-		return fmt.Errorf("could not marshal driver response: %v", err)
-	}
-	_, err = os.Stdout.Write(respData)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	}, nil
 }
 
 type aspectResponse struct {
