@@ -85,6 +85,10 @@ func run(args []string) error {
 	}
 	targets := fs.Args()
 	if len(targets) == 0 {
+		// FIXME double check this. a comment in go/packages's goListDriver
+		// mentions that no patterns at all means to query for ".". I'm not sure
+		// if that would be possible to do in bazel-land, but I'm going to leave
+		// this FIXME instead of thinking about it too much.
 		return errors.New("no targets specified")
 	}
 
