@@ -400,14 +400,13 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 }
 
 type aspectResponse struct {
-	ID         string   `json:"id"` // the full bazel label for the target
-	Name       string   `json:"name"`
-	PkgPath    string   `json:"pkg_path"`
-	GoFiles    []string `json:"go_files"`    // relative file paths
-	OtherFiles []string `json:"other_files"` // relative file paths
-	// relative file paths and usually just a
-	// slice with the empty string as its only
-	// entry.
+	ID              string   `json:"id"` // the full bazel label for the target
+	Name            string   `json:"name"`
+	PkgPath         string   `json:"pkg_path"`
+	GoFiles         []string `json:"go_files"`    // relative file paths
+	OtherFiles      []string `json:"other_files"` // relative file paths
+	CompiledGoFiles []string `json:"compiled_go_files"`
+	// Usually, just the Go import path of the package.
 	Roots []string `json:"roots"`
 }
 
@@ -428,11 +427,12 @@ func aspectResponseToPackage(resp *aspectResponse, pwd string) *packages.Package
 	// FIXME check all the places that gopls's golist driver (golist.go, etc.)
 	// plops stuff into the Errors struct.
 	return &packages.Package{
-		ID:         resp.ID,
-		Name:       resp.Name,
-		PkgPath:    resp.PkgPath,
-		GoFiles:    absolutizeFilePaths(resp.GoFiles, pwd),
-		OtherFiles: absolutizeFilePaths(resp.OtherFiles, pwd),
+		ID:              resp.ID,
+		Name:            resp.Name,
+		PkgPath:         resp.PkgPath,
+		GoFiles:         absolutizeFilePaths(resp.GoFiles, pwd),
+		OtherFiles:      absolutizeFilePaths(resp.OtherFiles, pwd),
+		CompiledGoFiles: absolutizeFilePaths(resp.CompiledGoFiles, pwd),
 	}
 }
 

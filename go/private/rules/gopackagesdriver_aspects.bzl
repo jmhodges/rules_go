@@ -112,13 +112,18 @@ def _export_driver_response(go, target, source):
     archive = target[GoArchive]
     if archive == None:
         archive = go.archive(source)
-    compiled_go_sources = []
+    compiled_go_files = []
     for src in archive.data.srcs:
-        compiled_go_sources.append(src.path)
-    print("FIXME archive.data: ", archive.data, "\narchive.data.srcs: ", archive.data.srcs)
-    # FIXME updated this resp
+        compiled_go_files.append(src.path)
+
+
+    print("FIXME export 078 source", source)
+    print("FIXME export 079 archive", archive)
+    print("FIXME export 080 archive.data", archive.data)
+    print("FIXME export 081 archive.data.srcs", archive.data.srcs)
+    print("FIXME export 082 archive.data.orig_srcs", archive.data.orig_srcs)
     return {
-        "compiled_go_sources": compiled_go_sources,
+        "compiled_go_files": compiled_go_files,
     }
 
 # gopackagesdriver_files_aspect returns the info about a bazel Go target that

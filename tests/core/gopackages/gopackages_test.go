@@ -38,6 +38,15 @@ go_library(
 	importpath = "fakeimportpath/goodbye",
 	visibility = ["//visibility:public"],
 )
+
+go_library(
+	name = "hascgo",
+	srcs = ["hascgo.go"],
+	importpath = "fakeimportpath/hascgo",
+	visibility = ["//visibility:public"],
+	cgo = True,
+)
+
 -- hello.go --
 package hello
 
@@ -56,6 +65,14 @@ package goodbye
 import "fmt"
 
 func C() string { return fmt.Sprintf("goodbye is", 45) }
+
+-- hascgo.go --
+package hascgo
+
+// int foo = 12;
+import "C"
+
+var foo = int(C.foo)
 `,
 	})
 }
@@ -92,6 +109,7 @@ func TestSinglePkgPattern(t *testing.T) {
 	if pkg.ID != expectedID {
 		t.Errorf("ID: want %#v, got %#v", expectedID, pkg.ID)
 	}
+	// FIXME test import path
 	expectedGoFiles := []string{"hello.go"}
 	if !compareFiles(expectedGoFiles, pkg.GoFiles) {
 		t.Errorf("GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
@@ -149,6 +167,67 @@ func TestSingleFilePattern(t *testing.T) {
 	if !compareFiles(expectedGoFiles, pkg.GoFiles) {
 		t.Errorf("GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
 	}
+
+	pkgs, err = packages.Load(cfg, fmt.Sprintf("file=%s/goodbye_other.go", os.Getenv("PWD")))
+	if err != nil {
+		t.Fatalf("unable to packages.Load: %s", err)
+	}
+	if len(pkgs) < 1 {
+		t.Fatalf("no packages returned")
+	}
+	if len(pkgs) != 1 {
+		t.Errorf("too many packages returned: want 1, got %d", len(pkgs))
+	}
+	if pkg.ID != expectedID {
+		t.Errorf("absolute path ID: want %#v, got %#v", expectedID, pkg.ID)
+	}
+	if !compareFiles(expectedGoFiles, pkg.GoFiles) {
+		t.Errorf("absolute path GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
+	}
+}
+
+func TestCompiledGoFilesIncludesCgo(t *testing.T) {
+	t.Fatalf("ask about where to find to find or how to cgo generated intermediate files")
+	// check we can actually build :goodbye
+	if err := bazel_testing.RunBazel("build", "//:hascgo"); err != nil {
+		t.Fatalf("unable to build //:goodbye normally: %s", err)
+	}
+
+	driverPath, err := getDriverPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Setenv("GOPACKAGESDRIVER", driverPath)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cfg := &packages.Config{
+		Mode:    packages.NeedCompiledGoFiles,
+		Context: ctx,
+	}
+	pkgs, err := packages.Load(cfg, "//:hascgo")
+	if len(pkgs) < 1 {
+		t.Fatalf("no packages returned")
+	}
+	if len(pkgs) != 1 {
+		t.Errorf("too many packages returned: want 1, got %d", len(pkgs))
+	}
+	pkg := pkgs[0]
+	expectedID := "//:hascgo"
+	if pkg.ID != expectedID {
+		t.Errorf("absolute path ID: want %#v, got %#v", expectedID, pkg.ID)
+	}
+	expectedCompiledGoFiles := []string{"foobar"}
+	if !compareFiles(expectedCompiledGoFiles, pkg.CompiledGoFiles) {
+		t.Errorf("absolute path CompiledGoFiles: want (without srcFilePrefix) %v, got %v", expectedCompiledGoFiles, pkg.CompiledGoFiles)
+	}
+}
+
+func TestWithDepsInFilesAndExportAspects(t *testing.T) {
+	t.Fail()
+}
+
+func TestMultiplePatterns(t *testing.T) {
+	t.Fail()
 }
 
 func getDriverPath() (string, error) {
