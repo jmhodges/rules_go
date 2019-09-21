@@ -113,6 +113,8 @@ func run(args []string) error {
 		aspect = "gopackagesdriver_export"
 	} else if req.Mode&(packages.NeedName|packages.NeedFiles) != 0 {
 		aspect = "gopackagesdriver_files"
+	} else {
+		return fmt.Errorf("unsupported packages.LoadMode's set")
 	}
 
 	// We ask bazel to write build event protos to a binary file, which
