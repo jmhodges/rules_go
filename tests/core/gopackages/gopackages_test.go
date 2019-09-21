@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -40,6 +41,7 @@ func A() string { return fmt.Sprintf("A is", 12) }
 	})
 }
 
+// FIXME rename file to gopackagesdriver_test.go
 func Test(t *testing.T) {
 	// check we can actually build :hello
 	args := []string{
@@ -70,6 +72,16 @@ func Test(t *testing.T) {
 	if len(pkgs) != 1 {
 		t.Errorf("too many packages returned: want 1, got %d", len(pkgs))
 	}
+	pkg := pkgs[0]
+	expectedID := "//:hello"
+	if pkg.ID != expectedID {
+		t.Errorf("ID: want %#v, got %#v", expectedID, pkg.ID)
+	}
+	expectedGoFiles := []string{}
+	if reflect.DeepEqual(expectedGoFiles, pkg.GoFiles) {
+		t.Errorf("GoFiles: want %v, got %v", expectedID, pkg.ID)
+	}
+
 }
 
 func getDriverPath() (string, error) {

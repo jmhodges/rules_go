@@ -27,8 +27,10 @@ import (
 	"go/types"
 	"io/ioutil"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 
 	bespb "github.com/bazelbuild/rules_go/go/tools/gopackagesdriver/proto/build_event_stream"
@@ -85,6 +87,8 @@ func run(args []string) error {
 	if len(targets) == 0 {
 		return errors.New("no targets specified")
 	}
+
+	pwd := os.Getenv("PWD")
 
 	reqData, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
@@ -159,6 +163,7 @@ func run(args []string) error {
 				return fmt.Errorf("%s: target did not build successfully", id.GetLabel())
 			}
 			for _, g := range completed.GetOutputGroup() {
+				log.Println("FIXME 20 og:", g)
 				for _, s := range g.GetFileSets() {
 					if setId := s.GetId(); setId != "" {
 						rootSets = append(rootSets, setId)
@@ -171,7 +176,16 @@ func run(args []string) error {
 			files := event.GetNamedSetOfFiles().GetFiles()
 			fileNames := make([]string, len(files))
 			for i, f := range files {
-				fileNames[i] = f.GetName()
+				u, err := url.Parse(f.GetUri())
+				if err != nil {
+					log.Fatalf("unable to parse file URI %#v: %s", f.GetUri(), err)
+				}
+				if u.Scheme == "file" {
+					log.Println("FIXME 30 ur:", u.Path)
+					fileNames[i] = u.Path
+				} else {
+					log.Fatalf("scheme in bazel output files must be \"file\", but got %#v in URI %#v", u.Scheme, f.GetUri())
+				}
 			}
 			setToFiles[id.GetId()] = fileNames
 			sets := event.GetNamedSetOfFiles().GetFileSets()
@@ -202,26 +216,22 @@ func run(args []string) error {
 	for _, s := range rootSets {
 		visit(s, files, map[string]bool{})
 	}
-	sortedFiles := make([]string, 0, len(files))
-	for f := range files {
-		sortedFiles = append(sortedFiles, f)
-	}
-	sort.Strings(sortedFiles)
 
-	// Load data files referenced on the command line.
+	// FIXME Need to handle this de-duping elsewhere
 	pkgs := make(map[string]*packages.Package)
 	roots := make(map[string]bool)
-	for _, target := range targets {
-		// FIXME need to turn relative paths into absolute ones here.
-		panic(fmt.Sprintf("json processing not implemented: %s, %v", target, sortedFiles))
-	}
+	for fp, _ := range files {
+		log.Println("FIXME 50 wut fp:", fp)
+		resp, err := parseAspectResponse(fp)
+		if err != nil {
+			log.Fatalf("unable to parse JSON response in file %#v from aspect %#v: %s", fp, aspect, err)
+		}
+		pkg := aspectResponseToPackage(resp, pwd)
+		pkgs[pkg.ID] = pkg
 
-	sortedRoots := make([]string, 0, len(roots))
-	for root := range roots {
-		sortedRoots = append(sortedRoots, root)
+		// FIXME ???? no idea
+		roots[pkg.ID] = true
 	}
-	sort.Strings(sortedRoots)
-
 	sortedPkgs := make([]*packages.Package, 0, len(pkgs))
 	for _, pkg := range pkgs {
 		sortedPkgs = append(sortedPkgs, pkg)
@@ -230,8 +240,13 @@ func run(args []string) error {
 		return sortedPkgs[i].ID < sortedPkgs[j].ID
 	})
 
+	sortedRoots := make([]string, 0, len(roots))
+	for root := range roots {
+		sortedRoots = append(sortedRoots, root)
+	}
+	sort.Strings(sortedRoots)
 	resp := driverResponse{
-		Sizes:    nil, // TODO
+		Sizes:    nil, // FIXME
 		Roots:    sortedRoots,
 		Packages: sortedPkgs,
 	}
@@ -244,5 +259,53 @@ func run(args []string) error {
 		return err
 	}
 
-	return errors.New("not implemented")
+	return nil
+}
+
+type aspectResponse struct {
+	ID         string   `json:"id"` // the full bazel label for the target
+	Name       string   `json:"name"`
+	PkgPath    string   `json:"pkg_path"`
+	GoFiles    []string `json:"go_files"`    // relative file paths
+	OtherFiles []string `json:"other_files"` // relative file paths
+	// relative file paths and usually just a
+	// slice with the empty string as its only
+	// entry.
+	Roots []string `json:"roots"`
+}
+
+func parseAspectResponse(fp string) (*aspectResponse, error) {
+	resp := &aspectResponse{}
+	bs, err := ioutil.ReadFile(fp)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(bs, resp)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func aspectResponseToPackage(resp *aspectResponse, pwd string) *packages.Package {
+	// FIXME check all the places that gopls's golist driver (golist.go, etc.)
+	// plops stuff into the Errors struct.
+	return &packages.Package{
+		ID:         resp.ID,
+		Name:       resp.Name,
+		PkgPath:    resp.PkgPath,
+		GoFiles:    absolutizeFilePaths(resp.GoFiles, pwd),
+		OtherFiles: absolutizeFilePaths(resp.OtherFiles, pwd),
+	}
+}
+
+func absolutizeFilePaths(fps []string, pwd string) []string {
+	if len(fps) == 0 {
+		return fps
+	}
+	abs := make([]string, len(fps))
+	for i, fp := range fps {
+		abs[i] = filepath.Join(pwd, fp)
+	}
+	return abs
 }

@@ -4,10 +4,8 @@ load(
 )
 load(
     "@io_bazel_rules_go//go/private:providers.bzl",
-    "GoBinary",
     "GoLibrary",
     "GoSource",
-    "GoTest",
 )
 
 # FIXME unused. Ditch it?
@@ -44,24 +42,35 @@ def _gopackagesdriver_files_aspect_impl(target, ctx):
 
     # FIXME rules_go question: i suspect this isn't quite right. GoArchive mentions that orig_srcs
     # is more different kinds of files while srcs includes files that are output
-    # after cgo or cover processing is done. 
+    # after cgo or cover processing is done.
     for src in source.srcs:
         if src.extension == "go":
             go_srcs.append(src.path)
         else:
             nongo_srcs.append(src.path)
     label_parts = []
+    roots = []
     if target.label.workspace_name != "":
         label_parts.append("@"+target.label.workspace_name)
+        roots.append(target.label.workspace_root)
     label_parts.append("//"+target.label.package)
     label_parts.append(":"+target.label.name)
     label_string = "".join(label_parts)
+
     json_serialized = struct(
         id = label_string,
         name = pkg_name,
-        pkg_path = library.importpath,
-        go_files = go_srcs,
-        other_fiels = nongo_srcs,
+        pkg_path = library.importpath, # FIXME maybe not right? maybe only from
+                                       # the other _export aspect?
+        go_files = go_srcs, # FIXME make these absolute paths in the driver
+        other_files = nongo_srcs,
+
+        # FIXME make these absolute paths in the
+        # driver target.label.workspace_root will be an empty string, but we'll
+        # be making it an absolute file path, and it's handy to just have the
+        # string there to add to. And later we might need more roots.
+        # FIXME this turns out to not be right and in gopackagesdriver.go we just use the ID of the package?
+        roots = [target.label.workspace_root],
     ).to_json()
 
     # FIXME go_binary that embeds a go_library will cause the same contents
@@ -86,4 +95,5 @@ gopackagesdriver_files_aspect = aspect(
     _gopackagesdriver_files_aspect_impl,
     attr_aspects = [],
     toolchains = ["@io_bazel_rules_go//go:toolchain"],
+    # FIXME set up `provides` arg
 )
