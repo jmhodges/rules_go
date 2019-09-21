@@ -46,6 +46,7 @@ load(
 )
 load(
     "@io_bazel_rules_go//go/private:rules/gopackagesdriver_aspects.bzl",
+    _gopackagesdriver_export_aspect = "gopackagesdriver_export_aspect",
     _gopackagesdriver_files_aspect = "gopackagesdriver_files_aspect",
 )
 load(
@@ -123,6 +124,9 @@ go_path = _go_path
 """
 
 gopackagesdriver_files = _gopackagesdriver_files_aspect
+""" FIXME write docs """
+
+gopackagesdriver_export = _gopackagesdriver_export_aspect
 """ FIXME write docs """
 
 def go_vet_test(*args, **kwargs):
