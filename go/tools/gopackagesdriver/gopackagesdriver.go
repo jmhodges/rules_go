@@ -83,13 +83,13 @@ func run(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	targets := fs.Args()
-	if len(targets) == 0 {
+	patterns := fs.Args()
+	if len(patterns) == 0 {
 		// FIXME double check this. a comment in go/packages's goListDriver
 		// mentions that no patterns at all means to query for ".". I'm not sure
 		// if that would be possible to do in bazel-land, but I'm going to leave
 		// this FIXME instead of thinking about it too much.
-		return errors.New("no targets specified")
+		return errors.New("no patterns specified")
 	}
 
 	pwd := os.Getenv("PWD")
@@ -136,6 +136,11 @@ func run(args []string) error {
 	cmd.Args = append(cmd.Args, "--build_event_binary_file="+eventFile.Name())
 	cmd.Args = append(cmd.Args, req.BuildFlags...)
 	cmd.Args = append(cmd.Args, "--")
+
+	// FIXME once we start handling other query types (like `file=`), not all of
+	// the arguments given us will be bazel targets. go/packages calls these
+	// arguments `patterns`, so we reproduce that here.
+	targets := patterns
 	for _, target := range targets {
 		cmd.Args = append(cmd.Args, target)
 	}
