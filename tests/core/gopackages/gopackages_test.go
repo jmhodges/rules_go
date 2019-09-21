@@ -19,6 +19,7 @@ import (
 // BUILD.bazel.
 var goPkgDriverPath = flag.String("goPkgDriverPath", "", "path to the gopackagesdriver binary")
 
+// FIXME should this test directory be somewhere else?
 func TestMain(m *testing.M) {
 	bazel_testing.TestMain(m, bazel_testing.Args{
 		Main: `
@@ -109,7 +110,10 @@ func TestSinglePkgPattern(t *testing.T) {
 	if pkg.ID != expectedID {
 		t.Errorf("ID: want %#v, got %#v", expectedID, pkg.ID)
 	}
-	// FIXME test import path
+	expectedImportPath := "fakeimportpath/hello"
+	if expectedImportPath != pkg.PkgPath {
+		t.Errorf("PkgPath: want %#v, got %#v", expectedImportPath, pkg.PkgPath)
+	}
 	expectedGoFiles := []string{"hello.go"}
 	if !compareFiles(expectedGoFiles, pkg.GoFiles) {
 		t.Errorf("GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
@@ -163,6 +167,10 @@ func TestSingleFilePattern(t *testing.T) {
 	if pkg.ID != expectedID {
 		t.Errorf("ID: want %#v, got %#v", expectedID, pkg.ID)
 	}
+	expectedImportPath := "fakeimportpath/goodbye"
+	if expectedImportPath != pkg.PkgPath {
+		t.Errorf("PkgPath: want %#v, got %#v", expectedImportPath, pkg.PkgPath)
+	}
 	expectedGoFiles := []string{"goodbye.go", "goodbye_other.go"}
 	if !compareFiles(expectedGoFiles, pkg.GoFiles) {
 		t.Errorf("GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
@@ -179,10 +187,13 @@ func TestSingleFilePattern(t *testing.T) {
 		t.Errorf("too many packages returned: want 1, got %d", len(pkgs))
 	}
 	if pkg.ID != expectedID {
-		t.Errorf("absolute path ID: want %#v, got %#v", expectedID, pkg.ID)
+		t.Errorf("absolute path, ID: want %#v, got %#v", expectedID, pkg.ID)
+	}
+	if expectedImportPath != pkg.PkgPath {
+		t.Errorf("abolute path, PkgPath: want %#v, got %#v", expectedImportPath, pkg.PkgPath)
 	}
 	if !compareFiles(expectedGoFiles, pkg.GoFiles) {
-		t.Errorf("absolute path GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
+		t.Errorf("absolute path, GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
 	}
 }
 
@@ -217,7 +228,11 @@ func TestCompiledGoFilesIncludesCgo(t *testing.T) {
 	if pkg.ID != expectedID {
 		t.Errorf("absolute path ID: want %#v, got %#v", expectedID, pkg.ID)
 	}
-	expectedCompiledGoFiles := []string{"foobar"}
+	expectedImportPath := "fakeimportpath/hascgo"
+	if expectedImportPath != pkg.PkgPath {
+		t.Errorf("PkgPath: want %#v, got %#v", expectedImportPath, pkg.PkgPath)
+	}
+	expectedCompiledGoFiles := []string{"FIXME foobar"}
 	if !compareFiles(expectedCompiledGoFiles, pkg.CompiledGoFiles) {
 		t.Errorf("absolute path CompiledGoFiles: want (without srcFilePrefix) %v, got %v", expectedCompiledGoFiles, pkg.CompiledGoFiles)
 	}
@@ -225,6 +240,7 @@ func TestCompiledGoFilesIncludesCgo(t *testing.T) {
 
 func TestWithDepsInFilesAndExportAspects(t *testing.T) {
 	t.Skipf("doesn't do deps, yet") // FIXME deps!
+
 }
 
 func TestExportedTypeCheckData(t *testing.T) {
