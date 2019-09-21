@@ -104,7 +104,7 @@ func run(args []string) error {
 	var targets, fileQueries []string
 	for _, patt := range patterns {
 		if strings.HasPrefix(patt, fileQueryPrefix) {
-			fp := patt[len(fileQueryPrefix):]
+			fp := strings.TrimPrefix(patt, fileQueryPrefix)
 			if len(fp) == 0 {
 				return fmt.Errorf("\"file=\" prefix given with no query after it")
 			}
@@ -180,7 +180,16 @@ func (e *StderrExitError) Error() string {
 }
 
 func filePathToLabel(fp string) (string, error) {
-	bs, err := bazelQuery(strings.TrimPrefix(fp, "./"))
+	// FIXME handle ~ and remove the PWD prefix if its an absolute path and
+	// reject if PWD isn't a prefix of the absolute path
+	fp = filepath.Clean(fp)
+	if filepath.IsAbs(fp) {
+		if !strings.HasPrefix(fp, pwd) {
+			return "", fmt.Errorf("error converting filepath %v to bazel file label: filepath is absolute but the file doesn't exist in the tree below the current working directory")
+		}
+		fp = strings.TrimPrefix(fp, pwd+"/")
+	}
+	bs, err := bazelQuery(fp)
 	if err != nil {
 		return "", fmt.Errorf("error converting filepath %v to bazel file label: %w", fp, err)
 	}
