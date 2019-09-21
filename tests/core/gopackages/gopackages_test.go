@@ -93,8 +93,8 @@ func TestSinglePkgPattern(t *testing.T) {
 		t.Errorf("ID: want %#v, got %#v", expectedID, pkg.ID)
 	}
 	expectedGoFiles := []string{}
-	if reflect.DeepEqual(expectedGoFiles, pkg.GoFiles) {
-		t.Errorf("GoFiles: want %v, got %v", expectedID, pkg.ID)
+	if !reflect.DeepEqual(expectedGoFiles, pkg.GoFiles) {
+		t.Errorf("GoFiles: want %v, got %v", expectedGoFiles, pkg.GoFiles)
 	}
 }
 
@@ -114,7 +114,7 @@ func XTestSingleFilePattern(t *testing.T) {
 		Mode:    packages.NeedName | packages.NeedFiles,
 		Context: ctx,
 	}
-	pkgs, err := packages.Load(cfg, "//:goodbye")
+	pkgs, err := packages.Load(cfg, "file=./goodbye.go")
 	if err != nil {
 		t.Fatalf("unable to packages.Load: %s", err)
 	}
@@ -125,13 +125,13 @@ func XTestSingleFilePattern(t *testing.T) {
 		t.Errorf("too many packages returned: want 1, got %d", len(pkgs))
 	}
 	pkg := pkgs[0]
-	expectedID := "//:hello"
+	expectedID := "//:goodbye"
 	if pkg.ID != expectedID {
 		t.Errorf("ID: want %#v, got %#v", expectedID, pkg.ID)
 	}
 	expectedGoFiles := []string{}
-	if reflect.DeepEqual(expectedGoFiles, pkg.GoFiles) {
-		t.Errorf("GoFiles: want %v, got %v", expectedID, pkg.ID)
+	if !reflect.DeepEqual(expectedGoFiles, pkg.GoFiles) {
+		t.Errorf("GoFiles: want %v, got %v", expectedGoFiles, pkg.GoFiles)
 	}
 }
 
