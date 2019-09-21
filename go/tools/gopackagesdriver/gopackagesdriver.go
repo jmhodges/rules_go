@@ -108,11 +108,11 @@ func run(args []string) error {
 	// files in an output group. Each .json file contains a serialized
 	// *packages.Package object.
 	outputGroup := "gopackagesdriver_data"
-	aspect := "gopackagesdriver_todo"
+	aspect := "@io_bazel_rules_go//go:def.bzl%"
 	if req.Mode&(packages.NeedCompiledGoFiles|packages.NeedExportsFile) != 0 {
-		aspect = "gopackagesdriver_export"
+		aspect += "gopackagesdriver_export"
 	} else if req.Mode&(packages.NeedName|packages.NeedFiles) != 0 {
-		aspect = "gopackagesdriver_files"
+		aspect += "gopackagesdriver_files"
 	} else {
 		return fmt.Errorf("unsupported packages.LoadModes set")
 	}
@@ -133,7 +133,7 @@ func run(args []string) error {
 
 	cmd := exec.Command("bazel", "build")
 	// FIXME allow overriding of the io_bazel_rules_go external name?
-	cmd.Args = append(cmd.Args, "--aspects=@io_bazel_rules_go//go:def.bzl%"+aspect)
+	cmd.Args = append(cmd.Args, "--aspects="+aspect)
 	cmd.Args = append(cmd.Args, "--output_groups="+outputGroup)
 	cmd.Args = append(cmd.Args, "--build_event_binary_file="+eventFile.Name())
 	cmd.Args = append(cmd.Args, req.BuildFlags...)
