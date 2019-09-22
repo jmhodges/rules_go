@@ -60,19 +60,19 @@ package hello
 
 import "fmt"
 
-func A() string { return fmt.Sprintf("hello is", 12) }
+func A() string { return fmt.Sprintf("hello is %d", 12) }
 -- goodbye.go --
 package goodbye
 
 import "fmt"
 
-func B() string { return fmt.Sprintf("goodbye is", 22) }
+func B() string { return fmt.Sprintf("goodbye is %d", 22) }
 -- goodbye_other.go --
 package goodbye
 
 import "fmt"
 
-func C() string { return fmt.Sprintf("goodbye is", 45) }
+func C() string { return fmt.Sprintf("goodbye is %d", 45) }
 
 -- hascgo.go --
 package hascgo
