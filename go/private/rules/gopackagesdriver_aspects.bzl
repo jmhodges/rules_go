@@ -112,10 +112,13 @@ def _export_driver_response(go, target, source):
     archive = target[GoArchive]
     if archive == None:
         archive = go.archive(source)
+    if go.nogo == None:
+        # FIXME how to require nogo? Should we make a way to get export_file without it?
+        fail(msg = "a nogo target must be passed to `go_register_toolchains` with at least `vet = True` in order to get type check export data requested by this aspect")
+
     compiled_go_files = []
     for src in archive.data.srcs:
         compiled_go_files.append(src.path)
-
 
     print("FIXME export 078 source", source)
     print("FIXME export 079 archive", archive)
@@ -144,4 +147,18 @@ gopackagesdriver_export_aspect = aspect(
     attr_aspects = [],
     toolchains = ["@io_bazel_rules_go//go:toolchain"],
     # FIXME set up `provides` arg
+)
+
+def _debug_impl(target, ctx):
+    go = go_context(ctx, ctx.rule.attr)
+    print("FIXME DOES IT HAVE nogo?", go.nogo)
+    print("FIXME GoSource", target[GoSource])
+    print("FIXME GoArchive", target[GoArchive])
+    print("FIXME GoArchiveData", target[GoArchive].data)
+    return []
+
+debug_aspect = aspect(
+    _debug_impl,
+    attr_aspects = [],
+    toolchains = ["@io_bazel_rules_go//go:toolchain"],
 )
