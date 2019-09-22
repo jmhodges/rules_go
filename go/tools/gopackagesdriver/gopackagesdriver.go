@@ -86,6 +86,8 @@ var (
 )
 
 func run(args []string) error {
+	log.Println("FIXME run 001: args", args)
+
 	// Parse command line arguments and driver request sent on stdin.
 	fs := flag.NewFlagSet("gopackagesdriver", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
@@ -225,6 +227,7 @@ func fileLabelToBazelTargets(label, origFile string) ([]string, error) {
 func bazelQuery(args ...string) ([]byte, error) {
 	cmd := exec.Command("bazel", "query")
 	cmd.Args = append(cmd.Args, args...)
+	log.Println("FIXME bazelQuery 002: bazel query", cmd.Args)
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	cmd.Stdout = stdout
@@ -242,6 +245,8 @@ func bazelQuery(args ...string) ([]byte, error) {
 
 // FIXME only really supports one target
 func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResponse, error) {
+	log.Println("FIXME packagesFromBazelTargets 001: targets", targets)
+
 	// Build package data files using bazel. We use one of several aspects
 	// (depending on what mode we're in). The aspect produces .json and source
 	// files in an output group. Each .json file contains a serialized
@@ -403,9 +408,11 @@ type aspectResponse struct {
 	ID              string   `json:"id"` // the full bazel label for the target
 	Name            string   `json:"name"`
 	PkgPath         string   `json:"pkg_path"`
-	GoFiles         []string `json:"go_files"`    // relative file paths
-	OtherFiles      []string `json:"other_files"` // relative file paths
-	CompiledGoFiles []string `json:"compiled_go_files"`
+	GoFiles         []string `json:"go_files"`          // relative file paths
+	CompiledGoFiles []string `json:"compiled_go_files"` // relative file paths
+	OtherFiles      []string `json:"other_files"`       // relative file paths
+	ExportFile      string   `json:"export_file"`       // relative file path
+
 	// Usually, just the Go import path of the package.
 	Roots []string `json:"roots"`
 }
@@ -431,8 +438,9 @@ func aspectResponseToPackage(resp *aspectResponse, pwd string) *packages.Package
 		Name:            resp.Name,
 		PkgPath:         resp.PkgPath,
 		GoFiles:         absolutizeFilePaths(resp.GoFiles, pwd),
-		OtherFiles:      absolutizeFilePaths(resp.OtherFiles, pwd),
 		CompiledGoFiles: absolutizeFilePaths(resp.CompiledGoFiles, pwd),
+		OtherFiles:      absolutizeFilePaths(resp.OtherFiles, pwd),
+		ExportFile:      filepath.Join(resp.ExportFile, pwd),
 	}
 }
 

@@ -115,6 +115,8 @@ def _export_driver_response(go, target, source):
     if go.nogo == None:
         # FIXME how to require nogo? Should we make a way to get export_file without it?
         fail(msg = "a nogo target must be passed to `go_register_toolchains` with at least `vet = True` in order to get type check export data requested by this aspect")
+    if archive.out_export == None:
+        fail(msg = "out_export wasn't set on given GoArchive for %s" % target)
 
     compiled_go_files = []
     for src in archive.data.srcs:
@@ -127,6 +129,7 @@ def _export_driver_response(go, target, source):
     print("FIXME export 082 archive.data.orig_srcs", archive.data.orig_srcs)
     return {
         "compiled_go_files": compiled_go_files,
+        "export_file": archive.out_export.path,
     }
 
 # gopackagesdriver_files_aspect returns the info about a bazel Go target that
