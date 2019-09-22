@@ -22,9 +22,16 @@ var goPkgDriverPath = flag.String("goPkgDriverPath", "", "path to the gopackages
 // FIXME should this test directory be somewhere else?
 func TestMain(m *testing.M) {
 	bazel_testing.TestMain(m, bazel_testing.Args{
+		Nogo: "@//:gopackagesdriver_nogo",
 		Main: `
 -- BUILD.bazel --
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "nogo")
+
+nogo(
+    name = "gopackagesdriver_nogo",
+    vet = True,
+    visibility = ["//visibility:public"],
+)
 
 go_library(
 	name = "hello",
@@ -89,7 +96,7 @@ func TestSinglePkgPattern(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.Setenv("GOPACKAGESDRIVER", driverPath)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	cfg := &packages.Config{
 		Mode:    packages.NeedName | packages.NeedFiles,
@@ -122,6 +129,7 @@ func TestSinglePkgPattern(t *testing.T) {
 
 const srcFilePrefix = "/execroot/io_bazel_rules_go/bazel-out/darwin-fastbuild/bin/tests/core/gopackages/darwin_amd64_stripped/gopackages_test.runfiles/io_bazel_rules_go/"
 
+// FIXME move func below tests?
 func compareFiles(expected, actual []string) bool {
 	if len(expected) != len(actual) {
 		return false
@@ -146,7 +154,7 @@ func TestSingleFilePattern(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.Setenv("GOPACKAGESDRIVER", driverPath)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	cfg := &packages.Config{
 		Mode:    packages.NeedName | packages.NeedFiles,
@@ -202,7 +210,7 @@ func TestCompiledGoFilesIncludesCgo(t *testing.T) {
 	t.Skipf("ask about where to find to find or how to cgo generated intermediate files")
 	// check we can actually build :goodbye
 	if err := bazel_testing.RunBazel("build", "//:hascgo"); err != nil {
-		t.Fatalf("unable to build //:goodbye normally: %s", err)
+		t.Fatalf("unable to build //:hascgo normally: %s", err)
 	}
 
 	driverPath, err := getDriverPath()
@@ -210,7 +218,7 @@ func TestCompiledGoFilesIncludesCgo(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.Setenv("GOPACKAGESDRIVER", driverPath)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	cfg := &packages.Config{
 		Mode:    packages.NeedCompiledGoFiles,
@@ -226,7 +234,7 @@ func TestCompiledGoFilesIncludesCgo(t *testing.T) {
 	pkg := pkgs[0]
 	expectedID := "//:hascgo"
 	if pkg.ID != expectedID {
-		t.Errorf("absolute path ID: want %#v, got %#v", expectedID, pkg.ID)
+		t.Errorf("ID: want %#v, got %#v", expectedID, pkg.ID)
 	}
 	expectedImportPath := "fakeimportpath/hascgo"
 	if expectedImportPath != pkg.PkgPath {
@@ -234,18 +242,48 @@ func TestCompiledGoFilesIncludesCgo(t *testing.T) {
 	}
 	expectedCompiledGoFiles := []string{"FIXME foobar"}
 	if !compareFiles(expectedCompiledGoFiles, pkg.CompiledGoFiles) {
-		t.Errorf("absolute path CompiledGoFiles: want (without srcFilePrefix) %v, got %v", expectedCompiledGoFiles, pkg.CompiledGoFiles)
+		t.Errorf("CompiledGoFiles: want (without srcFilePrefix) %v, got %v", expectedCompiledGoFiles, pkg.CompiledGoFiles)
 	}
 }
 
 func TestWithDepsInFilesAndExportAspects(t *testing.T) {
 	t.Skipf("doesn't do deps, yet") // FIXME deps!
-
 }
 
 func TestExportedTypeCheckData(t *testing.T) {
 	// FIXME exported type check information!
-	t.Skipf("doesn't do exported type check data (creating and then setting ExportFile)")
+	if err := bazel_testing.RunBazel("build", "//:hello"); err != nil {
+		t.Fatalf("unable to build //:hascgo normally: %s", err)
+	}
+	driverPath, err := getDriverPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Setenv("GOPACKAGESDRIVER", driverPath)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cfg := &packages.Config{
+		Mode:    packages.NeedExportsFile,
+		Context: ctx,
+	}
+	pkgs, err := packages.Load(cfg, "//:hello")
+	if len(pkgs) < 1 {
+		t.Fatalf("no packages returned")
+	}
+	if len(pkgs) != 1 {
+		t.Errorf("too many packages returned: want 1, got %d", len(pkgs))
+	}
+	pkg := pkgs[0]
+	expectedID := "//:hello"
+	if pkg.ID != expectedID {
+		t.Errorf("ID: want %#v, got %#v", expectedID, pkg.ID)
+	}
+	expectedExportFile := "FIXMEfakeexportfilepath"
+	if pkg.ExportFile != expectedExportFile {
+		t.Errorf("ExportFile: want %#v, got %#v", expectedExportFile, pkg.ExportFile)
+	}
+	// FIXME test type check info from this and test cgo version.
+
 }
 
 func TestMultiplePatterns(t *testing.T) {
