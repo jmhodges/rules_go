@@ -86,9 +86,9 @@ def _basic_driver_response(target, source, library):
     go_srcs = []
     nongo_srcs = []
 
-    # FIXME rules_go question: i suspect this isn't quite right. GoArchive mentions that orig_srcs
-    # is more different kinds of files while srcs includes files that are output
-    # after cgo or cover processing is done.
+    # FIXME we're going to need to dig into GoCompilePkg to get the
+    # cgo-generated intermediate go files and this extension check might not
+    # work for those (and other similar generated go files, possibly).
     for src in source.srcs:
         if src.extension == "go":
             go_srcs.append(src.path)
