@@ -86,8 +86,7 @@ var (
 )
 
 func run(args []string) error {
-	log.Println("FIXME run 001: args", args)
-
+	log.Println("FIXME run 1:", args)
 	// Parse command line arguments and driver request sent on stdin.
 	fs := flag.NewFlagSet("gopackagesdriver", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
@@ -187,7 +186,7 @@ func filePathToLabel(fp string) (string, error) {
 	fp = filepath.Clean(fp)
 	if filepath.IsAbs(fp) {
 		if !strings.HasPrefix(fp, pwd) {
-			return "", fmt.Errorf("error converting filepath %v to bazel file label: filepath is absolute but the file doesn't exist in the tree below the current working directory")
+			return "", fmt.Errorf("error converting filepath %#v to bazel file label: filepath is absolute but the file doesn't exist in the tree below the current working directory", fp)
 		}
 		fp = strings.TrimPrefix(fp, pwd+"/")
 	}
@@ -209,15 +208,15 @@ func fileLabelToBazelTargets(label, origFile string) ([]string, error) {
 		return nil, fmt.Errorf("error bazel file label %#v to bazel target: %w", label, err)
 	}
 	bbs := bytes.Split(bs, []byte{'\n'})
-	if len(bbs) == 0 {
-		return nil, fmt.Errorf("no targets in %#v contains the source file %#v", label[ind+1:], origFile)
-	}
 	targs := make([]string, 0, len(bbs))
 	for _, line := range bbs {
 		if len(line) == 0 {
 			continue
 		}
 		targs = append(targs, string(line))
+	}
+	if len(targs) == 0 {
+		return nil, fmt.Errorf("no targets in %#v contains the source file %#v", label[ind+1:], origFile)
 	}
 	return targs, nil
 }
@@ -227,7 +226,7 @@ func fileLabelToBazelTargets(label, origFile string) ([]string, error) {
 func bazelQuery(args ...string) ([]byte, error) {
 	cmd := exec.Command("bazel", "query")
 	cmd.Args = append(cmd.Args, args...)
-	log.Println("FIXME bazelQuery 002: bazel query", cmd.Args)
+	log.Println("1FIXME bazelQuery 002: bazel query", cmd.Args)
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	cmd.Stdout = stdout
@@ -243,15 +242,16 @@ func bazelQuery(args ...string) ([]byte, error) {
 	return stdout.Bytes(), nil
 }
 
+const goPkgsDriverOutputGroup = "gopackagesdriver_data"
+
 // FIXME only really supports one target
 func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResponse, error) {
-	log.Println("FIXME packagesFromBazelTargets 001: targets", targets)
-
+	log.Println("2FIXME packagesFromBazelTargets 001: targets", targets)
 	// Build package data files using bazel. We use one of several aspects
 	// (depending on what mode we're in). The aspect produces .json and source
 	// files in an output group. Each .json file contains a serialized
 	// *packages.Package object.
-	outputGroup := "gopackagesdriver_data"
+	outputGroups := goPkgsDriverOutputGroup + ",archive_files"
 	// FIXME allow overriding of the io_bazel_rules_go external name?
 	aspect := "@io_bazel_rules_go//go:def.bzl%"
 	if req.Mode&(packages.NeedCompiledGoFiles|packages.NeedExportsFile) != 0 {
@@ -276,19 +276,23 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 		os.Remove(eventFileName)
 	}()
 
+	realTargets = make([]string, 0, len(targets))
+	wantsBuiltinPkg := false
+	for _, targ := range targets {
+		if targ == "builtin" || targ == "@go_sdk//fakedup/builtin:go_default_library" {
+			wantsBuiltinPkg = true
+		} else {
+			realTargets = append(realTargets, targ)
+		}
+	}
 	cmd := exec.Command("bazel", "build")
 	cmd.Args = append(cmd.Args, "--aspects="+aspect)
-	cmd.Args = append(cmd.Args, "--output_groups="+outputGroup)
+	cmd.Args = append(cmd.Args, "--output_groups="+outputGroups)
 	cmd.Args = append(cmd.Args, "--build_event_binary_file="+eventFile.Name())
 	cmd.Args = append(cmd.Args, req.BuildFlags...)
 	cmd.Args = append(cmd.Args, "--")
+	cmd.Args = append(cmd.Args, realTargets...)
 
-	// FIXME once we start handling other query types (like `file=`), not all of
-	// the arguments given us will be bazel targets. go/packages calls these
-	// arguments `patterns`, so we reproduce that here.
-	for _, target := range targets {
-		cmd.Args = append(cmd.Args, target)
-	}
 	cmd.Stdout = os.Stderr // sic
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -319,6 +323,9 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 				return nil, fmt.Errorf("%s: target did not build successfully", id.GetLabel())
 			}
 			for _, g := range completed.GetOutputGroup() {
+				if g.GetName() != goPkgsDriverOutputGroup {
+					continue
+				}
 				for _, s := range g.GetFileSets() {
 					if setId := s.GetId(); setId != "" {
 						rootSets = append(rootSets, setId)
@@ -384,6 +391,13 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 			roots[r] = true
 		}
 	}
+	if wantsBuiltinPkg {
+		bpkg, err := buildBuiltinPackage()
+		if err != nil {
+			return nil, fmt.Errorf("unable to return query information for builtin package: %w", err)
+		}
+		pkgs = append(pkgs, bpkg)
+	}
 	sortedPkgs := make([]*packages.Package, 0, len(pkgs))
 	for _, pkg := range pkgs {
 		sortedPkgs = append(sortedPkgs, pkg)
@@ -437,14 +451,14 @@ func aspectResponseToPackage(resp *aspectResponse, pwd string) *packages.Package
 		ID:              resp.ID,
 		Name:            resp.Name,
 		PkgPath:         resp.PkgPath,
-		GoFiles:         absolutizeFilePaths(resp.GoFiles, pwd),
-		CompiledGoFiles: absolutizeFilePaths(resp.CompiledGoFiles, pwd),
-		OtherFiles:      absolutizeFilePaths(resp.OtherFiles, pwd),
-		ExportFile:      filepath.Join(resp.ExportFile, pwd),
+		GoFiles:         absolutizeFilePaths(pwd, resp.GoFiles),
+		CompiledGoFiles: absolutizeFilePaths(pwd, resp.CompiledGoFiles),
+		OtherFiles:      absolutizeFilePaths(pwd, resp.OtherFiles),
+		ExportFile:      filepath.Join(pwd, resp.ExportFile),
 	}
 }
 
-func absolutizeFilePaths(fps []string, pwd string) []string {
+func absolutizeFilePaths(pwd string, fps []string) []string {
 	if len(fps) == 0 {
 		return fps
 	}
@@ -453,4 +467,17 @@ func absolutizeFilePaths(fps []string, pwd string) []string {
 		abs[i] = filepath.Join(pwd, fp)
 	}
 	return abs
+}
+
+const stdlibLabelFmt = "@go_sdk/fakedup/%s:go_default_library"
+
+// FIXME not actually working. this is for gopls.
+func buildBuiltinPackage() (*packages.Package, error) {
+	id := fmt.Sprintf(stdlibLabelFmt, "builtin")
+	bazelQuery()
+	return &packages.Package{
+		ID:      id,
+		Name:    "builtin",
+		PkgPath: id,
+	}, nil
 }
