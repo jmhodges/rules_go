@@ -127,23 +127,6 @@ func TestSinglePkgPattern(t *testing.T) {
 	}
 }
 
-const srcFilePrefix = "/execroot/io_bazel_rules_go/bazel-out/darwin-fastbuild/bin/tests/core/gopackages/darwin_amd64_stripped/gopackages_test.runfiles/io_bazel_rules_go/"
-
-// FIXME move func below tests?
-func compareFiles(expected, actual []string) bool {
-	if len(expected) != len(actual) {
-		return false
-	}
-	for i, exp := range expected {
-		act := actual[i]
-		ind := strings.Index(act, srcFilePrefix)
-		if ind == -1 || exp != act[ind+len(srcFilePrefix):] {
-			return false
-		}
-	}
-	return true
-}
-
 func TestSingleFilePattern(t *testing.T) {
 	// check we can actually build :goodbye
 	if err := bazel_testing.RunBazel("build", "//:goodbye"); err != nil {
@@ -159,6 +142,7 @@ func TestSingleFilePattern(t *testing.T) {
 	cfg := &packages.Config{
 		Mode:    packages.NeedName | packages.NeedFiles,
 		Context: ctx,
+		Logf:    t.Logf,
 	}
 	pkgs, err := packages.Load(cfg, "file=./goodbye.go")
 	if err != nil {
@@ -184,25 +168,35 @@ func TestSingleFilePattern(t *testing.T) {
 		t.Errorf("GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
 	}
 
-	pkgs, err = packages.Load(cfg, fmt.Sprintf("file=%s/goodbye_other.go", os.Getenv("PWD")))
-	if err != nil {
-		t.Fatalf("unable to packages.Load: %s", err)
-	}
-	if len(pkgs) < 1 {
-		t.Fatalf("no packages returned")
-	}
-	if len(pkgs) != 1 {
-		t.Errorf("too many packages returned: want 1, got %d", len(pkgs))
-	}
-	if pkg.ID != expectedID {
-		t.Errorf("absolute path, ID: want %#v, got %#v", expectedID, pkg.ID)
-	}
-	if expectedImportPath != pkg.PkgPath {
-		t.Errorf("abolute path, PkgPath: want %#v, got %#v", expectedImportPath, pkg.PkgPath)
-	}
-	if !compareFiles(expectedGoFiles, pkg.GoFiles) {
-		t.Errorf("absolute path, GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
-	}
+	// FIXME Testing for absolute files doesn't seem to work because we can't do
+	// the environ work done in BazelCmd in the bazel commands inside
+	// gopackagesdriver. Will need to talk to jayconrod et. al. about this.
+
+	/*
+		absPath, err := filepath.Abs("./goodbye_other.go")
+		if err != nil {
+			t.Fatalf("unable to get goodbye_other.go's absolute file path")
+		}
+		pkgs, err = packages.Load(cfg, fmt.Sprintf("file=%s", absPath))
+		if err != nil {
+			t.Fatalf("unable to packages.Load: %s", err)
+		}
+		if len(pkgs) < 1 {
+			t.Fatalf("no packages returned")
+		}
+		if len(pkgs) != 1 {
+			t.Errorf("too many packages returned: want 1, got %d", len(pkgs))
+		}
+		if pkg.ID != expectedID {
+			t.Errorf("absolute path, ID: want %#v, got %#v", expectedID, pkg.ID)
+		}
+		if expectedImportPath != pkg.PkgPath {
+			t.Errorf("abolute path, PkgPath: want %#v, got %#v", expectedImportPath, pkg.PkgPath)
+		}
+		if !compareFiles(expectedGoFiles, pkg.GoFiles) {
+			t.Errorf("absolute path, GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
+		}
+	*/
 }
 
 func TestCompiledGoFilesIncludesCgo(t *testing.T) {
@@ -253,7 +247,7 @@ func TestWithDepsInFilesAndExportAspects(t *testing.T) {
 func TestExportedTypeCheckData(t *testing.T) {
 	// FIXME exported type check information!
 	if err := bazel_testing.RunBazel("build", "//:hello"); err != nil {
-		t.Fatalf("unable to build //:hascgo normally: %s", err)
+		t.Fatalf("unable to build //:hello normally: %s", err)
 	}
 	driverPath, err := getDriverPath()
 	if err != nil {
@@ -267,6 +261,10 @@ func TestExportedTypeCheckData(t *testing.T) {
 		Context: ctx,
 	}
 	pkgs, err := packages.Load(cfg, "//:hello")
+	if err != nil {
+		t.Fatalf("unable to packages.Load: %s", err)
+	}
+
 	if len(pkgs) < 1 {
 		t.Fatalf("no packages returned")
 	}
@@ -278,12 +276,11 @@ func TestExportedTypeCheckData(t *testing.T) {
 	if pkg.ID != expectedID {
 		t.Errorf("ID: want %#v, got %#v", expectedID, pkg.ID)
 	}
-	expectedExportFile := "FIXMEfakeexportfilepath"
-	if pkg.ExportFile != expectedExportFile {
+	expectedExportFile := "hello.a"
+	if compareFile(expectedExportFile, pkg.ExportFile) {
 		t.Errorf("ExportFile: want %#v, got %#v", expectedExportFile, pkg.ExportFile)
 	}
 	// FIXME test type check info from this and test cgo version.
-
 }
 
 func TestMultiplePatterns(t *testing.T) {
@@ -301,4 +298,27 @@ func getDriverPath() (string, error) {
 	}
 	f.Close()
 	return driverPath, nil
+}
+
+// FIXME move func below tests?
+func compareFiles(expected, actual []string) bool {
+	if len(expected) != len(actual) {
+		return false
+	}
+	for i, exp := range expected {
+		if !compareFile(exp, actual[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+const srcFilePrefix = "/execroot/io_bazel_rules_go/bazel-out/darwin-fastbuild/bin/tests/core/gopackages/darwin_amd64_stripped/gopackages_test.runfiles/io_bazel_rules_go/"
+
+func compareFile(expected, actual string) bool {
+	ind := strings.Index(actual, srcFilePrefix)
+	if ind == -1 || expected != actual[ind+len(srcFilePrefix):] {
+		return false
+	}
+	return true
 }
