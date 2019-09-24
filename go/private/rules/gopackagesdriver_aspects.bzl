@@ -40,8 +40,9 @@ def _gopackagesdriver_files_aspect_impl(target, ctx):
     # to distinguish go_test from go_binary if we just ignore go_binary's and
     # we'd still have to handle the case where go_binary directly has the srcs
     # on it with no intermediary go_library that's been set up in `embed`.
-    filename = "%s.gopackagesdriver_files_mode.json" % target.label.name
+    filename = "%s.files_aspect.gopackagesdriver.json" % target.label.name
     json_file = ctx.actions.declare_file(filename)
+    print("5FIXME ", json_serialized)
     ctx.actions.write(json_file, json_serialized)
 
     return [OutputGroupInfo(
@@ -58,17 +59,21 @@ def _gopackagesdriver_export_aspect_impl(target, ctx):
     # We have a library and we need to compile it in a new mode
     library = target[GoLibrary]
     resp = _basic_driver_response(target, source, library)
-    export_resp = _export_driver_response(go, target, source)
+    archive = target[GoArchive]
+    export_resp = _export_driver_response(go, target, archive)
     resp.update(**export_resp)
     json_serialized = struct(**resp).to_json()
 
-    filename = "%s.gopackagesdriver_export_mode.json" % target.label.name
+    filename = "%s.export_aspect.gopackagesdriver.json" % target.label.name
     json_file = ctx.actions.declare_file(filename)
     ctx.actions.write(json_file, json_serialized)
 
-    return [OutputGroupInfo(
-        gopackagesdriver_data = [json_file],
-    )]
+    return [
+        OutputGroupInfo(
+            archive_files = [archive.data.file],
+            gopackagesdriver_data = [json_file],
+        ),
+    ]
 
 
 def _basic_driver_response(target, source, library):
@@ -108,28 +113,20 @@ def _basic_driver_response(target, source, library):
         "roots": [label_string],
     }
 
-def _export_driver_response(go, target, source):
-    archive = target[GoArchive]
-    if archive == None:
-        archive = go.archive(source)
+def _export_driver_response(go, target, archive):
     if go.nogo == None:
         # FIXME how to require nogo? Should we make a way to get export_file without it?
-        fail(msg = "a nogo target must be passed to `go_register_toolchains` with at least `vet = True` in order to get type check export data requested by this aspect")
-    if archive.out_export == None:
+        fail(msg = "a nogo target must be passed to `go_register_toolchains` with at least `vet = True` or some other analysis tool in place in order to get type check export data requested by this aspect")
+    if archive.data.export_file == None:
         fail(msg = "out_export wasn't set on given GoArchive for %s" % target)
 
     compiled_go_files = []
     for src in archive.data.srcs:
         compiled_go_files.append(src.path)
 
-    print("FIXME export 078 source", source)
-    print("FIXME export 079 archive", archive)
-    print("FIXME export 080 archive.data", archive.data)
-    print("FIXME export 081 archive.data.srcs", archive.data.srcs)
-    print("FIXME export 082 archive.data.orig_srcs", archive.data.orig_srcs)
     return {
         "compiled_go_files": compiled_go_files,
-        "export_file": archive.out_export.path,
+        "export_file": archive.data.file.path,
     }
 
 # gopackagesdriver_files_aspect returns the info about a bazel Go target that
@@ -147,14 +144,14 @@ gopackagesdriver_files_aspect = aspect(
 # LoadModes. It does not recurse.
 gopackagesdriver_export_aspect = aspect(
     _gopackagesdriver_export_aspect_impl,
-    attr_aspects = [],
     toolchains = ["@io_bazel_rules_go//go:toolchain"],
+    required_aspect_providers = ["GoArchive", "GoArchiveData"],
     # FIXME set up `provides` arg
 )
 
 def _debug_impl(target, ctx):
     go = go_context(ctx, ctx.rule.attr)
-    print("FIXME DOES IT HAVE nogo?", go.nogo)
+
     print("FIXME GoSource", target[GoSource])
     print("FIXME GoArchive", target[GoArchive])
     print("FIXME GoArchiveData", target[GoArchive].data)
@@ -162,6 +159,6 @@ def _debug_impl(target, ctx):
 
 debug_aspect = aspect(
     _debug_impl,
-    attr_aspects = [],
+    attr_aspects = ["deps"],
     toolchains = ["@io_bazel_rules_go//go:toolchain"],
 )
