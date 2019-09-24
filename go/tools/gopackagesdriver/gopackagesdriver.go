@@ -251,7 +251,7 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 	// (depending on what mode we're in). The aspect produces .json and source
 	// files in an output group. Each .json file contains a serialized
 	// *packages.Package object.
-	outputGroups := goPkgsDriverOutputGroup + ",archive_files"
+	outputGroups := goPkgsDriverOutputGroup + ",gopackagesdriver_archives"
 	// FIXME allow overriding of the io_bazel_rules_go external name?
 	aspect := "@io_bazel_rules_go//go:def.bzl%"
 	if req.Mode&(packages.NeedCompiledGoFiles|packages.NeedExportsFile) != 0 {
@@ -276,7 +276,7 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 		os.Remove(eventFileName)
 	}()
 
-	realTargets = make([]string, 0, len(targets))
+	realTargets := make([]string, 0, len(targets))
 	wantsBuiltinPkg := false
 	for _, targ := range targets {
 		if targ == "builtin" || targ == "@go_sdk//fakedup/builtin:go_default_library" {
@@ -396,7 +396,7 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 		if err != nil {
 			return nil, fmt.Errorf("unable to return query information for builtin package: %w", err)
 		}
-		pkgs = append(pkgs, bpkg)
+		pkgs[bpkg.ID] = bpkg
 	}
 	sortedPkgs := make([]*packages.Package, 0, len(pkgs))
 	for _, pkg := range pkgs {
@@ -474,10 +474,14 @@ const stdlibLabelFmt = "@go_sdk/fakedup/%s:go_default_library"
 // FIXME not actually working. this is for gopls.
 func buildBuiltinPackage() (*packages.Package, error) {
 	id := fmt.Sprintf(stdlibLabelFmt, "builtin")
-	bazelQuery()
 	return &packages.Package{
 		ID:      id,
 		Name:    "builtin",
 		PkgPath: id,
+		GoFiles: []string{filepath.Join(pwd, "external/go_sdk/src/builtin/builtin.go")},
+		// pkg builtin never has an export file.
+		ExportFile: "",
+		// pkg builtin never has compiled Go files.
+		CompiledGoFiles: nil,
 	}, nil
 }

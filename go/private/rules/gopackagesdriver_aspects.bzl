@@ -42,7 +42,6 @@ def _gopackagesdriver_files_aspect_impl(target, ctx):
     # on it with no intermediary go_library that's been set up in `embed`.
     filename = "%s.files_aspect.gopackagesdriver.json" % target.label.name
     json_file = ctx.actions.declare_file(filename)
-    print("5FIXME ", json_serialized)
     ctx.actions.write(json_file, json_serialized)
 
     return [OutputGroupInfo(
@@ -70,7 +69,7 @@ def _gopackagesdriver_export_aspect_impl(target, ctx):
 
     return [
         OutputGroupInfo(
-            archive_files = [archive.data.file],
+            gopackagesdriver_archives = [archive.data.file],
             gopackagesdriver_data = [json_file],
         ),
     ]
@@ -79,10 +78,14 @@ def _gopackagesdriver_export_aspect_impl(target, ctx):
 def _basic_driver_response(target, source, library):
     # FIXME rules_go question: is this method of getting pkg_name acceptable or do we need to do
     # more interrogation of the source?
-    last_slash_index = library.importpath.rfind("/")
+
     pkg_name = library.importpath
-    if last_slash_index != -1:
-        pkg_name = pkg_name[last_slash_index+1:]
+    if library.is_main:
+        pkg_name = "main"
+    else:
+        last_slash_index = library.importpath.rfind("/")
+        if last_slash_index != -1:
+            pkg_name = pkg_name[last_slash_index+1:]
     go_srcs = []
     nongo_srcs = []
 
@@ -152,13 +155,23 @@ gopackagesdriver_export_aspect = aspect(
 def _debug_impl(target, ctx):
     go = go_context(ctx, ctx.rule.attr)
 
-    print("FIXME GoSource", target[GoSource])
-    print("FIXME GoArchive", target[GoArchive])
-    print("FIXME GoArchiveData", target[GoArchive].data)
-    return []
+    print("FIXME 001 GoSource", target[GoSource])
+    print("FIXME 002 GoArchive", target[GoArchive])
+    print("FIXME 003 GoArchiveData", target[GoArchive].data)
+    # foobar = ctx.actions.declare_file("foobar")
+
+    # ctx.actions.run_shell(
+    #     outputs = [foobar],
+    #     inputs = [go.sdk.root_file],
+    #     tools = [go.go],
+    #     command = ctx.expand_location("echo $(execpath @go_sdk//:builtin/builtin.go) > foobar && echo FIXME4"),
+    #     env = go.env,
+    # )
+    print("FIXME 050", go.sdk.libs)
+    return [] # [OutputGroupInfo(welp=[foobar])]
 
 debug_aspect = aspect(
     _debug_impl,
-    attr_aspects = ["deps"],
+    attr_aspects = [],
     toolchains = ["@io_bazel_rules_go//go:toolchain"],
 )
