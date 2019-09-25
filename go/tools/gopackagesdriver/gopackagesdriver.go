@@ -86,9 +86,9 @@ var (
 )
 
 func run(args []string) error {
-	log.Println("FIXME run 1:", args)
 	// Parse command line arguments and driver request sent on stdin.
 	fs := flag.NewFlagSet("gopackagesdriver", flag.ExitOnError)
+	// FIXME figure out how to set a --platforms call?
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -101,7 +101,6 @@ func run(args []string) error {
 		// this FIXME instead of thinking about it too much.
 		return errors.New("no patterns specified")
 	}
-
 	var targets, fileQueries []string
 	for _, patt := range patterns {
 		if strings.HasPrefix(patt, fileQueryPrefix) {
@@ -123,6 +122,7 @@ func run(args []string) error {
 	if err := json.Unmarshal(reqData, &req); err != nil {
 		return fmt.Errorf("could not unmarshal driver request: %v", err)
 	}
+	log.Println("FIXME driverRequest.Command 1", req.Command)
 	var resp *driverResponse
 	if len(fileQueries) != 0 {
 		fileTargs, err := bazelTargetsFromFileQueries(req, fileQueries)
