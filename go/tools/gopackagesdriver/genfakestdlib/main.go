@@ -66,7 +66,7 @@ func main() {
 
 var mapTmpl = template.Must(template.New("maps").Parse(`package {{.GenPkgName}}
 
-var stdlibByName = map[string]string{
+var stdlibByImportPath = map[string]string{
 	{{ range $i, $pkg := .Pkgs -}}
 	{{ $pkg.StdPkgImport | printf "%#v" }}: {{ $pkg.StdPkgBazelLabel | printf "%#v" }},
 	{{ end }}
