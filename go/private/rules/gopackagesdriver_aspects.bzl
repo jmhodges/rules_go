@@ -22,7 +22,7 @@ GoPackagesFilesProvider = provider(
     },
 )
 
-def _gopackagesdriver_files_aspect_impl(target, ctx):
+def _gopackagesdriver_files_nodeps_aspect_impl(target, ctx):
     go = go_context(ctx, ctx.rule.attr)
 
     source = target[GoSource] if GoSource in target else None
@@ -40,7 +40,7 @@ def _gopackagesdriver_files_aspect_impl(target, ctx):
     # to distinguish go_test from go_binary if we just ignore go_binary's and
     # we'd still have to handle the case where go_binary directly has the srcs
     # on it with no intermediary go_library that's been set up in `embed`.
-    filename = "%s.files_aspect.gopackagesdriver.json" % target.label.name
+    filename = "%s.files_nodeps_aspect.gopackagesdriver.json" % target.label.name
     json_file = ctx.actions.declare_file(filename)
     ctx.actions.write(json_file, json_serialized)
 
@@ -48,7 +48,7 @@ def _gopackagesdriver_files_aspect_impl(target, ctx):
         gopackagesdriver_data = [json_file],
     )]
 
-def _gopackagesdriver_export_aspect_impl(target, ctx):
+def _gopackagesdriver_export_nodeps_aspect_impl(target, ctx):
     go = go_context(ctx, ctx.rule.attr)
 
     source = target[GoSource] if GoSource in target else None
@@ -63,7 +63,7 @@ def _gopackagesdriver_export_aspect_impl(target, ctx):
     resp.update(**export_resp)
     json_serialized = struct(**resp).to_json()
 
-    filename = "%s.export_aspect.gopackagesdriver.json" % target.label.name
+    filename = "%s.export_nodeps_aspect.gopackagesdriver.json" % target.label.name
     json_file = ctx.actions.declare_file(filename)
     ctx.actions.write(json_file, json_serialized)
 
@@ -135,8 +135,8 @@ def _export_driver_response(go, target, archive):
 # gopackagesdriver_files_aspect returns the info about a bazel Go target that
 # satisfies go/packages.Load's NeedName and NeedFiles LoadModes. It does not
 # recurse.
-gopackagesdriver_files_aspect = aspect(
-    _gopackagesdriver_files_aspect_impl,
+gopackagesdriver_files_nodeps_aspect = aspect(
+    _gopackagesdriver_files_nodeps_aspect_impl,
     attr_aspects = [],
     toolchains = ["@io_bazel_rules_go//go:toolchain"],
     # FIXME set up `provides` arg
@@ -145,8 +145,15 @@ gopackagesdriver_files_aspect = aspect(
 # gopackagesdriver_files_aspect returns the info about a bazel Go target that
 # satisfies go/packages.Load's NeedCompiledGoFiles and NeedExportsFile
 # LoadModes. It does not recurse.
+gopackagesdriver_export_nodeps_aspect = aspect(
+    _gopackagesdriver_export_nodeps_aspect_impl,
+    toolchains = ["@io_bazel_rules_go//go:toolchain"],
+    required_aspect_providers = ["GoArchive", "GoArchiveData"],
+    # FIXME set up `provides` arg
+)
+
 gopackagesdriver_export_aspect = aspect(
-    _gopackagesdriver_export_aspect_impl,
+    _gopackagesdriver_export_nodeps_aspect_impl,
     toolchains = ["@io_bazel_rules_go//go:toolchain"],
     required_aspect_providers = ["GoArchive", "GoArchiveData"],
     # FIXME set up `provides` arg
@@ -167,7 +174,8 @@ def _debug_impl(target, ctx):
     #     command = ctx.expand_location("echo $(execpath @go_sdk//:builtin/builtin.go) > foobar && echo FIXME4"),
     #     env = go.env,
     # )
-    print("FIXME 050", go.sdk.libs)
+    print("FIXME 050 libs", go.sdk.libs)
+    print("FIXME 051 srcs", go.sdk.srcs)
     return [] # [OutputGroupInfo(welp=[foobar])]
 
 debug_aspect = aspect(

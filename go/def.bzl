@@ -46,8 +46,9 @@ load(
 )
 load(
     "@io_bazel_rules_go//go/private:rules/gopackagesdriver_aspects.bzl",
-    _gopackagesdriver_export_aspect = "gopackagesdriver_export_aspect",
-    _gopackagesdriver_files_aspect = "gopackagesdriver_files_aspect",
+    _gopackagesdriver_export_nodeps_aspect = "gopackagesdriver_export_nodeps_aspect",
+    _gopackagesdriver_files_nodeps_aspect = "gopackagesdriver_files_nodeps_aspect",
+    _debug_aspect = "debug_aspect", # FIXME remove this import
 )
 load(
     "@io_bazel_rules_go//extras:embed_data.bzl",
@@ -123,11 +124,14 @@ go_path = _go_path
         "mode": attr.string(default="link", values=["link", "copy"]) # Whether to copy files or produce soft links
 """
 
-gopackagesdriver_files = _gopackagesdriver_files_aspect
+gopackagesdriver_files = _gopackagesdriver_files_nodeps_aspect
 """ FIXME write docs """
 
-gopackagesdriver_export = _gopackagesdriver_export_aspect
+gopackagesdriver_export = _gopackagesdriver_export_nodeps_aspect
 """ FIXME write docs """
+
+debug_aspect = _debug_aspect
+""" FIXME remote this aspect """
 
 def go_vet_test(*args, **kwargs):
     fail("The go_vet_test rule has been removed. Please migrate to nogo instead, which supports vet tests.")
