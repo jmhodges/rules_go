@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel_testing"
+	"github.com/google/go-cmp/cmp"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -95,7 +96,7 @@ func TestSinglePkgPattern(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.Setenv("GOPACKAGESDRIVER", driverPath)
+	os.Setenv("GOPACKAGESDRIVER", driverPath) // FIXME Use Env and os.Environ
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	cfg := &packages.Config{
@@ -287,6 +288,95 @@ func TestMultiplePatterns(t *testing.T) {
 	t.Skipf("doesn't do multiple patterns, yet") // FIXME multiple patterns!
 }
 
+func TestStdlib(t *testing.T) {
+	// err := bazel_testing.RunBazel("run", "@io_bazel_rules_go//go/tools/gopackagesdriver", "--script_path='./gopackagesdriver'")
+	// if err != nil {
+	// 	t.Fatalf("unable to build gopackagesdriver in test bazel setup: %s", err)
+	// }
+	// defer func() {
+	// 	err := os.Remove("gopackagesdriver")
+	// 	if err != nil {
+	// 		t.Errorf("unable to remove gopackagesdriver script")
+	// 	}
+	// }()
+	testcases := []struct {
+		inputPatterns []string
+		mode          packages.LoadMode
+		outputPkgs    []*packages.Package
+	}{
+		{
+			[]string{"builtin"},
+			packages.NeedName | packages.NeedFiles,
+			[]*packages.Package{
+				&packages.Package{
+					ID:      "@go_sdk//:stdlib-builtin",
+					Name:    "builtin",
+					PkgPath: "@go_sdk//:stdlib-builtin",
+					GoFiles: []string{"external/go_sdk/src/builtin/builtin.go"},
+				},
+			},
+		},
+	}
+
+	// FIXME delete
+	driverPath, err := getDriverPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// FIXME using Config.Env doesn't work because gopackagesdriver isn't found
+	// in the interior bazel run.
+	for tcInd, tc := range testcases {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		cfg := &packages.Config{
+			Mode:    tc.mode,
+			Context: ctx,
+			Env:     append(os.Environ(), fmt.Sprintf("GOPACKAGESDRIVER=%s", driverPath)),
+		}
+		t.Logf("FIXME inputpatterns: %q", tc.inputPatterns)
+		pkgs, err := packages.Load(cfg, tc.inputPatterns...)
+		if err != nil {
+			t.Errorf("testcase#%d Load: %s", tcInd, err)
+			continue
+		}
+		if len(tc.outputPkgs) != len(pkgs) {
+			t.Errorf("testcase#%d num pkgs: want %d pkgs, got %d pkgs (want %q, got %q)", tcInd, len(tc.outputPkgs), len(pkgs), tc.outputPkgs, pkgs)
+		} else {
+			for i, exp := range tc.outputPkgs {
+				opt := cmp.FilterPath(
+					func(p cmp.Path) bool {
+						switch p.Last().String() {
+						case ".GoFiles", ".CompiledGoFiles", ".OtherFiles":
+							return true
+						}
+						return false
+					},
+					cmp.Transformer("RelativizeFilePath", func(absPaths []string) []string {
+						out := make([]string, len(absPaths))
+						for i, absPath := range absPaths {
+							if absPath == "" {
+								out[i] = ""
+								continue
+							}
+							ind := strings.Index(absPath, srcFilePrefix)
+							if ind == -1 {
+								out[i] = absPath
+								continue
+							}
+							out[i] = absPath[ind+len(srcFilePrefix):]
+						}
+						return out
+					}),
+				)
+				if !cmp.Equal(exp, pkgs[i], opt) {
+					t.Errorf("testcase#%d package %d, diff: %s", tcInd, i, cmp.Diff(exp, pkgs[i]))
+				}
+			}
+		}
+	}
+}
+
+// FIXME delete. this is now how to get this going.
 func getDriverPath() (string, error) {
 	if *goPkgDriverPath == "" {
 		return "", errors.New("-goPkgDriverPath arg was not passed to the test binary")

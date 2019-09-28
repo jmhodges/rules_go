@@ -26,7 +26,7 @@ type pkg struct {
 	StdPkgBazelLabel string
 }
 
-const stdlibLabelFmt = "@go_sdk/fakedup/%s:go_default_library"
+const stdlibLabelFmt = "@go_sdk//:stdlib-%s"
 
 func main() {
 	flag.Parse()

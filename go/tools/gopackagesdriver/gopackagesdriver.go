@@ -276,13 +276,15 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 		os.Remove(eventFileName)
 	}()
 
-	realTargets := make([]string, 0, len(targets))
-	wantsBuiltinPkg := false
+	bazelTargets := make([]string, 0, len(targets))
+	var stdlibPatterns []string
 	for _, targ := range targets {
-		if targ == "builtin" || targ == "@go_sdk//fakedup/builtin:go_default_library" {
-			wantsBuiltinPkg = true
+		if _, ok := stdlibByImportPath[targ]; ok {
+			stdlibPatterns = append(stdlibPatterns, targ)
+		} else if importPath, ok := stdlibByLabel[targ]; ok {
+			stdlibPatterns = append(stdlibPatterns, importPath)
 		} else {
-			realTargets = append(realTargets, targ)
+			bazelTargets = append(bazelTargets, targ)
 		}
 	}
 	cmd := exec.Command("bazel", "build")
@@ -291,7 +293,7 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 	cmd.Args = append(cmd.Args, "--build_event_binary_file="+eventFile.Name())
 	cmd.Args = append(cmd.Args, req.BuildFlags...)
 	cmd.Args = append(cmd.Args, "--")
-	cmd.Args = append(cmd.Args, realTargets...)
+	cmd.Args = append(cmd.Args, bazelTargets...)
 
 	cmd.Stdout = os.Stderr // sic
 	cmd.Stderr = os.Stderr
@@ -391,12 +393,29 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 			roots[r] = true
 		}
 	}
-	if wantsBuiltinPkg {
-		bpkg, err := buildBuiltinPackage()
-		if err != nil {
-			return nil, fmt.Errorf("unable to return query information for builtin package: %w", err)
+	for _, patt := range stdlibPatterns {
+		if patt == "builtin" {
+			// FIXME this doesn't need to exist when we actually build stdlib support
+			bpkg, err := buildBuiltinPackage()
+			if err != nil {
+				return nil, fmt.Errorf("unable to return query information for builtin package: %w", err)
+			}
+			roots[bpkg.PkgPath] = true
+			pkgs[bpkg.ID] = bpkg
+		} else {
+			// FIXME doesn't handle main, obvs, but this is just a bootstrap to see how far
+			// we can get gopls
+			ind := strings.LastIndex("/", patt)
+			if ind == -1 {
+				ind = 0
+			}
+			roots[patt] = true
+			pkgs[patt] = &packages.Package{
+				ID:      patt,
+				Name:    patt[ind:],
+				PkgPath: patt,
+			}
 		}
-		pkgs[bpkg.ID] = bpkg
 	}
 	sortedPkgs := make([]*packages.Package, 0, len(pkgs))
 	for _, pkg := range pkgs {
@@ -469,7 +488,7 @@ func absolutizeFilePaths(pwd string, fps []string) []string {
 	return abs
 }
 
-const stdlibLabelFmt = "@go_sdk/fakedup/%s:go_default_library"
+const stdlibLabelFmt = "@go_sdk//:stdlib-%s"
 
 // FIXME not actually working. this is for gopls.
 func buildBuiltinPackage() (*packages.Package, error) {

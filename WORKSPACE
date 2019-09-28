@@ -6,7 +6,8 @@ load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_depe
 
 go_rules_dependencies()
 
-go_register_toolchains()
+go_register_toolchains(nogo = "@//:vet_nogo")
+# go_register_toolchains()
 
 git_repository(
     name = "com_google_protobuf",
@@ -71,7 +72,7 @@ http_archive(
     ],
 )
 
-load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies")
+load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies", "go_repository")
 
 gazelle_dependencies()
 
@@ -94,4 +95,10 @@ grpc_dependencies()
 local_repository(
     name = "runfiles_remote_test",
     path = "tests/core/runfiles/runfiles_remote_test",
+)
+
+go_repository(
+    name = "com_github_google_go_cmp",
+    commit = "b1c9c4891a6525d98001fea424c8926c6d77bb56",
+    importpath = "github.com/google/go-cmp",
 )
