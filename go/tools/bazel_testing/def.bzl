@@ -38,10 +38,7 @@ def go_bazel_test(rule_files = None, **kwargs):
     # Add paths to rules_go files to arguments. bazel_testing will copy or link
     # these files.
     kwargs.setdefault("args", [])
-    kwargs["args"] = (["-begin_files"] +
-                      ["$(locations {})".format(t) for t in rule_files] +
-                      ["-end_files"] +
-                      kwargs["args"])
+    kwargs["args"] += ["--"] + ["$(locations {})".format(t) for t in rule_files]
 
     # Set rundir to the workspace root directory to ensure relative paths
     # are interpreted correctly.

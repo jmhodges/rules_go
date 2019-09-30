@@ -278,7 +278,7 @@ func setupWorkspace(args Args, files []string) (dir string, cleanup func() error
 		runfileMap[runfileKey{rf.Workspace, rf.ShortPath}] = rf.Path
 	}
 	workspaceNames := make(map[string]bool)
-	for _, argPath := range files {
+	for _, argPath := range flag.Args() {
 		shortPath := path.Clean(argPath)
 		if !strings.HasPrefix(shortPath, "external/") {
 			return "", cleanup, fmt.Errorf("unexpected file (missing 'external/' prefix): %s", argPath)
