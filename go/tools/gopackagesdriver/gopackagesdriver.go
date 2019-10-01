@@ -40,6 +40,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+// FIXME remove. just for debugging
 type modeInfo struct {
 	Name string
 	Mode packages.LoadMode
