@@ -40,6 +40,43 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+type modeInfo struct {
+	Name string
+	Mode packages.LoadMode
+}
+
+var modes = []modeInfo{
+	{"NeedName", packages.NeedName},
+
+	// NeedFiles adds GoFiles and OtherFiles.
+	{"NeedFiles", packages.NeedFiles},
+
+	// NeedCompiledGoFiles adds CompiledGoFiles.
+	{"NeedCompiledGoFiles", packages.NeedCompiledGoFiles},
+
+	// NeedImports adds Imports. If NeedDeps is not set, the Imports field will contain
+	// "placeholder"" Packages with only the ID set.
+	{"NeedImports", packages.NeedImports},
+
+	// NeedDeps adds the fields requested by the LoadMode in the packages in Imports.
+	{"NeedDeps", packages.NeedDeps},
+
+	// NeedExportsFile adds ExportsFile.
+	{"NeedExportsFile", packages.NeedExportsFile},
+
+	// NeedTypes adds Types, Fset, and IllTyped.
+	{"NeedTypes", packages.NeedTypes},
+
+	// NeedSyntax adds Syntax.
+	{"NeedSyntax", packages.NeedSyntax},
+
+	// NeedTypesInfo adds TypesInfo.
+	{"NeedTypesInfo", packages.NeedTypesInfo},
+
+	// NeedTypesSizes adds TypesSizes.
+	{"NeedTypesSizes", packages.NeedTypesSizes},
+}
+
 func main() {
 	f, err := os.OpenFile("/Users/jeffhodges/Desktop/wut.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
@@ -58,12 +95,12 @@ func main() {
 // driverRequest is a JSON object sent by golang.org/x/tools/go/packages
 // on stdin. Keep in sync.
 type driverRequest struct {
-	Command    string            `json:"command"`
+	Command    string            `json:"command"` // FIXME ???
 	Mode       packages.LoadMode `json:"mode"`
-	Env        []string          `json:"env"`
-	BuildFlags []string          `json:"build_flags"`
-	Tests      bool              `json:"tests"`
-	Overlay    map[string][]byte `json:"overlay"`
+	Env        []string          `json:"env"`         // FIXME handle
+	BuildFlags []string          `json:"build_flags"` // FIXME handle
+	Tests      bool              `json:"tests"`       // FIXME handle
+	Overlay    map[string][]byte `json:"overlay"`     // FIXME handle
 }
 
 // driverResponse is a JSON object sent by this program to
@@ -129,7 +166,12 @@ func run(args []string) error {
 	if err := json.Unmarshal(reqData, &req); err != nil {
 		return fmt.Errorf("could not unmarshal driver request: %v", err)
 	}
-	log.Println("FIXME driverRequest Mode 001", req.Mode)
+	log.Println("FIXME driverRequest Modes 001")
+	for _, m := range modes {
+		if req.Mode&m.Mode != 0 {
+			log.Println("FIXME 002 mode:", m.Name)
+		}
+	}
 	var resp *driverResponse
 	if len(fileQueries) != 0 {
 		fileTargs, err := bazelTargetsFromFileQueries(req, fileQueries)
@@ -400,6 +442,9 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 		for _, r := range resp.Roots {
 			roots[r] = true
 		}
+		for _, pkg := range pkg.Imports {
+			pkgs[pkg.ID] = pkg
+		}
 	}
 	for _, patt := range stdlibPatterns {
 		if patt == "builtin" {
@@ -413,15 +458,17 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 		} else {
 			// FIXME doesn't handle main, obvs, but this is just a bootstrap to see how far
 			// we can get gopls
-			ind := strings.LastIndex("/", patt)
+			ind := strings.LastIndex(patt, "/")
 			if ind == -1 {
 				ind = 0
 			}
+			id := fmt.Sprintf(stdlibLabelFmt, "builtin")
+
 			roots[patt] = true
 			pkgs[patt] = &packages.Package{
-				ID:      patt,
-				Name:    patt[ind:],
-				PkgPath: patt,
+				ID:      id,
+				Name:    patt[ind+1:],
+				PkgPath: id,
 			}
 		}
 	}
@@ -437,6 +484,7 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 	for root := range roots {
 		sortedRoots = append(sortedRoots, root)
 	}
+
 	sort.Strings(sortedRoots)
 	return &driverResponse{
 		Sizes:    nil, // FIXME

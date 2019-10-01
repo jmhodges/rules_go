@@ -29,6 +29,15 @@ type pkg struct {
 const stdlibLabelFmt = "@go_sdk//:stdlib-%s"
 
 func main() {
+	// FIXME using this style means we either have to check the out of this in
+	// to the repo to allow `go get` to work, or it requires bazel. But that
+	// latter idea might lead to people using the
+	// @io_bazel_rules_go//go/tools/gopackagesdriver in their own workspace
+	// which would be difficult to configure across multiple projects.
+
+	// FIXME actually the smart thing to do would be to make gopackagesdriver
+	// go-gettable by making it a very thing wrapper over a `bazel run` call of
+	// binary in @io_bazel_rules_go, yeah?
 	flag.Parse()
 	if *pkgList == "" {
 		log.Fatalf("genfakestdlib: required `-pkgList` argument not provided")
