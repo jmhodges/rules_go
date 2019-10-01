@@ -59,20 +59,69 @@ def _gopackagesdriver_export_nodeps_aspect_impl(target, ctx):
     library = target[GoLibrary]
     resp = _basic_driver_response(target, source, library)
     archive = target[GoArchive]
-    export_resp = _export_driver_response(go, target, archive)
+    export_resp = _export_driver_response(go, target.label, archive)
     resp.update(**export_resp)
     json_serialized = struct(**resp).to_json()
 
     filename = "%s.export_nodeps_aspect.gopackagesdriver.json" % target.label.name
     json_file = ctx.actions.declare_file(filename)
     ctx.actions.write(json_file, json_serialized)
-
+    archives = [archive.data.file]
+        
     return [
         OutputGroupInfo(
-            gopackagesdriver_archives = [archive.data.file],
+            gopackagesdriver_archives = archives,
             gopackagesdriver_data = [json_file],
         ),
     ]
+
+def _gopackagesdriver_export_aspect_impl(target, ctx):
+    go = go_context(ctx, ctx.rule.attr)
+    
+    resp = _gopackagesdriver_export_aspect_impl_go(target, ctx, go, True)
+    if resp == None:
+        return []
+    
+    json_serialized = struct(**resp).to_json()
+
+    filename = "%s.export_aspect.gopackagesdriver.json" % target.label.name
+    json_file = ctx.actions.declare_file(filename)
+    ctx.actions.write(json_file, json_serialized)
+
+    archives = [target[GoArchive].data.file]
+    for targ in target.deps:
+        if targ[GoArchive] != None:
+            archives.append(targ[GoArchive].data.file)
+
+    return [
+        OutputGroupInfo(
+            gopackagesdriver_archives = archives,
+            gopackagesdriver_data = [json_file],
+        ),
+    ]
+
+    
+def _gopackagesdriver_export_aspect_impl_go(target, ctx, go, check_deps):
+    source = target[GoSource] if GoSource in target else None
+    if not GoLibrary in target:
+        # Not a rule we can do anything with
+        return None
+    # We have a library and we need to compile it in a new mode
+    library = target[GoLibrary]
+    resp = _basic_driver_response(target, source, library)
+    archive = target[GoArchive]
+    export_resp = _export_driver_response(go, target.label, archive)
+    resp.update(**export_resp)
+
+    if check_deps:
+        imports = {}
+        resp["imports"] = imports
+        for targ in source.deps: # FIXME cgo_deps and cdeps
+            dep_resp = _gopackagesdriver_export_aspect_impl_go(targ, ctx, go, False)
+            if dep_resp != None:
+                imports[dep_resp["pkg_path"]] = dep_resp
+                
+    return resp
 
 
 def _basic_driver_response(target, source, library):
@@ -86,6 +135,7 @@ def _basic_driver_response(target, source, library):
         last_slash_index = library.importpath.rfind("/")
         if last_slash_index != -1:
             pkg_name = pkg_name[last_slash_index+1:]
+
     go_srcs = []
     nongo_srcs = []
 
@@ -116,12 +166,12 @@ def _basic_driver_response(target, source, library):
         "roots": [label_string],
     }
 
-def _export_driver_response(go, target, archive):
+def _export_driver_response(go, target_label, archive):
     if go.nogo == None:
         # FIXME how to require nogo? Should we make a way to get export_file without it?
         fail(msg = "a nogo target must be passed to `go_register_toolchains` with at least `vet = True` or some other analysis tool in place in order to get type check export data requested by this aspect")
     if archive.data.export_file == None:
-        fail(msg = "out_export wasn't set on given GoArchive for %s" % target)
+        fail(msg = "out_export wasn't set on given GoArchive for %s" % target_label)
 
     compiled_go_files = []
     for src in archive.data.srcs:
@@ -155,6 +205,7 @@ gopackagesdriver_export_nodeps_aspect = aspect(
 gopackagesdriver_export_aspect = aspect(
     _gopackagesdriver_export_nodeps_aspect_impl,
     toolchains = ["@io_bazel_rules_go//go:toolchain"],
+    attr_aspects = ["deps"],
     required_aspect_providers = ["GoArchive", "GoArchiveData"],
     # FIXME set up `provides` arg
 )

@@ -41,6 +41,13 @@ import (
 )
 
 func main() {
+	f, err := os.OpenFile("/Users/jeffhodges/Desktop/wut.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("couldn't open log file: %s", err)
+	}
+	defer f.Close()
+	log.SetOutput(f)
+	log.Println("FIXME main 001: targets", os.Args)
 	log.SetPrefix("gopackagesdriver: ")
 	log.SetFlags(0)
 	if err := run(os.Args[1:]); err != nil {
@@ -122,7 +129,7 @@ func run(args []string) error {
 	if err := json.Unmarshal(reqData, &req); err != nil {
 		return fmt.Errorf("could not unmarshal driver request: %v", err)
 	}
-	log.Println("FIXME driverRequest.Command 1", req.Command)
+	log.Println("FIXME driverRequest Mode 001", req.Mode)
 	var resp *driverResponse
 	if len(fileQueries) != 0 {
 		fileTargs, err := bazelTargetsFromFileQueries(req, fileQueries)
@@ -254,7 +261,8 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 	outputGroups := goPkgsDriverOutputGroup + ",gopackagesdriver_archives"
 	// FIXME allow overriding of the io_bazel_rules_go external name?
 	aspect := "@io_bazel_rules_go//go:def.bzl%"
-	if req.Mode&(packages.NeedCompiledGoFiles|packages.NeedExportsFile) != 0 {
+	// FIXME this needs to be regularized
+	if req.Mode&(packages.NeedCompiledGoFiles|packages.NeedExportsFile|packages.NeedDeps|packages.NeedImports) != 0 {
 		aspect += "gopackagesdriver_export"
 	} else if req.Mode&(packages.NeedName|packages.NeedFiles) != 0 {
 		aspect += "gopackagesdriver_files"
@@ -446,6 +454,7 @@ type aspectResponse struct {
 	OtherFiles      []string `json:"other_files"`       // relative file paths
 	ExportFile      string   `json:"export_file"`       // relative file path
 
+	Imports map[string]*aspectResponse
 	// Usually, just the Go import path of the package.
 	Roots []string `json:"roots"`
 }
@@ -466,6 +475,11 @@ func parseAspectResponse(fp string) (*aspectResponse, error) {
 func aspectResponseToPackage(resp *aspectResponse, pwd string) *packages.Package {
 	// FIXME check all the places that gopls's golist driver (golist.go, etc.)
 	// plops stuff into the Errors struct.
+	imports := make(map[string]*packages.Package, len(resp.Imports))
+	for pkgpath, pkg := range resp.Imports {
+		imports[pkgpath] = aspectResponseToPackage(pkg, pwd)
+	}
+
 	return &packages.Package{
 		ID:              resp.ID,
 		Name:            resp.Name,
@@ -474,6 +488,7 @@ func aspectResponseToPackage(resp *aspectResponse, pwd string) *packages.Package
 		CompiledGoFiles: absolutizeFilePaths(pwd, resp.CompiledGoFiles),
 		OtherFiles:      absolutizeFilePaths(pwd, resp.OtherFiles),
 		ExportFile:      filepath.Join(pwd, resp.ExportFile),
+		Imports:         imports,
 	}
 }
 
