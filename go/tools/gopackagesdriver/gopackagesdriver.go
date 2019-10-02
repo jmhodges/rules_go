@@ -332,10 +332,10 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 	bazelTargets := make([]string, 0, len(targets))
 	var stdlibPatterns []string
 	for _, targ := range targets {
-		if _, ok := stdlibmaps.StdlibBazelLabelToImportPath[targ]; ok {
+		if imp, ok := stdlibmaps.StdlibBazelLabelToImportPath[targ]; ok {
+			stdlibPatterns = append(stdlibPatterns, imp)
+		} else if _, ok := stdlibmaps.StdlibImportPathToBazelLabel[targ]; ok {
 			stdlibPatterns = append(stdlibPatterns, targ)
-		} else if importPath, ok := stdlibmaps.StdlibImportPathToBazelLabel[targ]; ok {
-			stdlibPatterns = append(stdlibPatterns, importPath)
 		} else {
 			bazelTargets = append(bazelTargets, targ)
 		}
@@ -466,21 +466,17 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 		} else {
 			// FIXME doesn't handle main, obvs, but this is just a bootstrap to see how far
 			// we can get gopls
-			ind := strings.Index(patt, stdlibLabelPrefix)
-			if ind == -1 {
-				return nil, fmt.Errorf("no such (fake) bazel label for stdlib package %#v", patt)
-			}
-			pkgpath := patt[len(stdlibLabelPrefix)+1:]
 			ind = strings.LastIndex(pkgpath, "/")
 			if ind == -1 {
 				ind = 0
 			}
-			name := pkgpath[ind+1:]
-			roots[patt] = true
-			pkgs[patt] = &packages.Package{
-				ID:      patt,
+			name := patt[ind+1:]
+			label := fmt.Sprintf(stdlibLabelFmt, patt)
+			roots[label] = true
+			pkgs[label] = &packages.Package{
+				ID:      label,
 				Name:    name,
-				PkgPath: pkgpath,
+				PkgPath: patt,
 			}
 		}
 	}
