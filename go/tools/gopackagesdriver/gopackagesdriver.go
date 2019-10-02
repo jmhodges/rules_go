@@ -298,7 +298,7 @@ const goPkgsDriverOutputGroup = "gopackagesdriver_data"
 
 // FIXME only really supports one target
 func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResponse, error) {
-	log.Println("2FIXME packagesFromBazelTargets 001: targets", targets)
+	log.Println("FIXME packagesFromBazelTargets 001: targets", targets)
 	// Build package data files using bazel. We use one of several aspects
 	// (depending on what mode we're in). The aspect produces .json and source
 	// files in an output group. Each .json file contains a serialized
@@ -340,6 +340,7 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 			bazelTargets = append(bazelTargets, targ)
 		}
 	}
+	log.Println("FIXME packagesFromBazelTargets 010 bazelTargets:", bazelTargets, "stdlibPatterns:", stdlibPatterns)
 	cmd := exec.Command("bazel", "build")
 	cmd.Args = append(cmd.Args, "--aspects="+aspect)
 	cmd.Args = append(cmd.Args, "--output_groups="+outputGroups)
@@ -454,28 +455,32 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 		}
 	}
 	for _, patt := range stdlibPatterns {
-		if patt == "builtin" {
+		if patt == "@go_sdk//stdlib/:builtin" {
 			// FIXME this doesn't need to exist when we actually build stdlib support
 			bpkg, err := buildBuiltinPackage()
 			if err != nil {
 				return nil, fmt.Errorf("unable to return query information for builtin package: %w", err)
 			}
-			roots[bpkg.PkgPath] = true
+			roots[bpkg.ID] = true
 			pkgs[bpkg.ID] = bpkg
 		} else {
 			// FIXME doesn't handle main, obvs, but this is just a bootstrap to see how far
 			// we can get gopls
-			ind := strings.LastIndex(patt, "/")
+			ind := strings.Index(patt, stdlibLabelPrefix)
+			if ind == -1 {
+				return nil, fmt.Errorf("no such (fake) bazel label for stdlib package %#v", patt)
+			}
+			pkgpath := patt[len(stdlibLabelPrefix)+1:]
+			ind = strings.LastIndex(pkgpath, "/")
 			if ind == -1 {
 				ind = 0
 			}
-			id := fmt.Sprintf(stdlibLabelFmt, "builtin")
-
+			name := pkgpath[ind+1:]
 			roots[patt] = true
 			pkgs[patt] = &packages.Package{
-				ID:      id,
-				Name:    patt[ind+1:],
-				PkgPath: id,
+				ID:      patt,
+				Name:    name,
+				PkgPath: pkgpath,
 			}
 		}
 	}
@@ -573,7 +578,10 @@ func absolutizeFilePaths(pwd string, fps []string) []string {
 	return abs
 }
 
-const stdlibLabelFmt = "@go_sdk//:stdlib-%s"
+const (
+	stdlibLabelPrefix = "@go_sdk//stdlib/:"
+	stdlibLabelFmt    = stdlibLabelPrefix + "%s"
+)
 
 // FIXME not actually working. this is for gopls.
 func buildBuiltinPackage() (*packages.Package, error) {
@@ -581,7 +589,7 @@ func buildBuiltinPackage() (*packages.Package, error) {
 	return &packages.Package{
 		ID:      id,
 		Name:    "builtin",
-		PkgPath: id,
+		PkgPath: "builtin",
 		GoFiles: []string{filepath.Join(pwd, "external/go_sdk/src/builtin/builtin.go")},
 		// pkg builtin never has an export file.
 		ExportFile: "",

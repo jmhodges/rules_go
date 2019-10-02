@@ -309,9 +309,21 @@ func TestStdlib(t *testing.T) {
 			packages.NeedName | packages.NeedFiles,
 			[]*packages.Package{
 				&packages.Package{
-					ID:      "@go_sdk//:stdlib-builtin",
+					ID:      "@go_sdk//stdlib/:builtin",
 					Name:    "builtin",
-					PkgPath: "@go_sdk//:stdlib-builtin",
+					PkgPath: "builtin",
+					GoFiles: []string{"external/go_sdk/src/builtin/builtin.go"},
+				},
+			},
+		},
+		{
+			[]string{"@go_sdk//stdlib/:builtin"},
+			packages.NeedName | packages.NeedFiles,
+			[]*packages.Package{
+				&packages.Package{
+					ID:      "@go_sdk//stdlib/:builtin",
+					Name:    "builtin",
+					PkgPath: "builtin",
 					GoFiles: []string{"external/go_sdk/src/builtin/builtin.go"},
 				},
 			},

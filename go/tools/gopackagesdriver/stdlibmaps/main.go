@@ -21,6 +21,7 @@ var (
 type tmplData struct {
 	GenPkgName string
 	Pkgs       []pkg
+	VendorPkgs []pkg
 }
 
 type pkg struct {
@@ -28,7 +29,7 @@ type pkg struct {
 	StdPkgBazelLabel string
 }
 
-const stdlibLabelFmt = "@go_sdk//:stdlib-%s"
+const stdlibLabelFmt = "@go_sdk//stdlib/:%s"
 
 func main() {
 	// FIXME using this style means we either have to check the out of this in
@@ -53,15 +54,21 @@ func main() {
 	}
 	lines := bytes.Split(b, []byte{'\n'})
 	pkgs := make([]pkg, 0, len(lines))
+	var vendorPkgs []pkg
 	for _, line := range lines {
 		line = bytes.TrimSpace(line)
 		if len(line) == 0 {
 			continue
 		}
-		pkgs = append(pkgs, pkg{
+		p := pkg{
 			StdPkgImport:     string(line),
 			StdPkgBazelLabel: fmt.Sprintf(stdlibLabelFmt, line),
-		})
+		}
+		if !bytes.HasPrefix(line, []byte("vendor/")) {
+			pkgs = append(pkgs, p)
+		} else {
+			vendorPkgs = append(vendorPkgs, p)
+		}
 	}
 	sort.Slice(
 		pkgs,
@@ -70,20 +77,10 @@ func main() {
 		},
 	)
 	buf := &bytes.Buffer{}
-	fs, err := ioutil.ReadDir(*goroot)
-	if err != nil {
-		log.Fatalf("unable to ls GOROOT: %s", err)
-	}
-	log.Printf("FIXME genfakestdlib: %v", fs)
-	for _, f := range fs {
-		log.Printf("FIXME genfakestdlib 10: %v", f.Name())
-	}
-
-	info := map[string]PkgInfo{}
 	err = mapTmpl.Execute(buf, tmplData{
-		GenPkgName:       *pkgName,
-		Pkgs:             pkgs,
-		ImportPathToInfo: info,
+		GenPkgName: *pkgName,
+		Pkgs:       pkgs,
+		VendorPkgs: vendorPkgs,
 	})
 	if err != nil {
 		log.Fatalf("genfakestdlib: unable to execute the templated file to generate the Go code: %s", err)
@@ -98,7 +95,9 @@ func main() {
 var mapTmpl = template.Must(template.New("maps").Parse(`package {{.GenPkgName}}
 
 // StdlibImportPathToBazelLabel maps the Go standard import paths of libraries
-// in the Go stdlib to their equivalent, fake bazel label.
+// in the Go stdlib to their equivalent, fake bazel label. If you need to also
+// look up labels of the libraries that the stdlib vendors, use
+// StdlibVendorImportPathToBazelLabel.
 var StdlibImportPathToBazelLabel = map[string]string{
 	{{ range $i, $pkg := .Pkgs -}}
 	{{ $pkg.StdPkgImport | printf "%#v" }}: {{ $pkg.StdPkgBazelLabel | printf "%#v" }},
@@ -106,18 +105,32 @@ var StdlibImportPathToBazelLabel = map[string]string{
 }
 
 // StdlibBazelLabelToImportPath maps to fake bazel labels for libraries in the
-// Go standard library to their equivalent Go standard import path.
+// Go standard library to their equivalent Go standard import path. It includes
+// the private libraries vendored by the stdlib because the label'ing fixes the
+// namespaceing so that non-stdlib targets will not refer to it.
 var StdlibBazelLabelToImportPath = map[string]string{
 	{{ range $i, $pkg := .Pkgs -}}
 	{{ $pkg.StdPkgBazelLabel | printf "%#v" }}: {{ $pkg.StdPkgImport | printf "%#v" }},
 	{{ end }}
+	{{ range $i, $pkg := .VendorPkgs -}}
+	{{ $pkg.StdPkgBazelLabel | printf "%#v" }}: {{ $pkg.StdPkgImport | printf "%#v" }},
+	{{ end }}
+}
+
+// StdlibVendorImportPathToBazelLabel maps the Go standard import paths of the
+// vendored libraries in the Go stdlib to their equivalent, fake bazel label. The
+// import paths are prefixed with "vendor/".
+var StdlibVendorImportPathToBazelLabel = map[string]string{
+	{{ range $i, $pkg := .VendorPkgs -}}
+	{{ $pkg.StdPkgImport | printf "%#v" }}: {{ $pkg.StdPkgBazelLabel | printf "%#v" }},
+	{{ end }}
 }
 
 // StdlibImportPaths is a sorted list of the import path of every library in the
-// Go standard library.
+// Go standard library except the libraries the stdlib vendored.
 var StdlibImportPaths = []string{
 	{{ range $i, $pkg := .Pkgs -}}
-	{{ $pkg.StdPkgImport | printf "%#v" }}
+	{{ $pkg.StdPkgImport | printf "%#v" }},
 	{{ end }}
 }
 `))
