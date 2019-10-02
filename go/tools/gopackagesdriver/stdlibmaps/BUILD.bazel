@@ -1,9 +1,9 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_binary")
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
 
 go_binary(
     name = "genfakestdlib",
     srcs = ["main.go"],
-    visibility = ["//visibility:private"]
+    visibility = ["//visibility:private"],
 )
 
 load(":genfakestdlib.bzl", "gen_stdlib_maps")
@@ -16,6 +16,7 @@ gen_stdlib_maps(
 
 go_library(
     name = "go_default_library",
-    srcs = ["stdlib.go"]
+    srcs = ["stdlib.go"],
+    importpath = "github.com/bazelbuild/rules_go/go/tools/gopackagesdriver/stdlibmaps",
     visibility = ["//go/tools/gopackagesdriver:__subpackages__"],
 )

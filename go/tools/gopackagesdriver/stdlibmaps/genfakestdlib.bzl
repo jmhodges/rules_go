@@ -2,9 +2,6 @@ load("@io_bazel_rules_go//go:def.bzl", "go_context", "go_rule")
 
 def _go_gen_stdlib_maps(ctx):
     go = go_context(ctx)
-    print("FIXME go env is", go.env)
-    print("FIXME go srcs is", go.sdk.srcs)
-    print("FIXME just one is", go.sdk.srcs[0].path)
     go.actions.run_shell(
         outputs = [ctx.outputs.out],
         inputs = [go.sdk.package_list]+go.sdk.srcs,

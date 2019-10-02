@@ -38,6 +38,8 @@ import (
 	bespb "github.com/bazelbuild/rules_go/go/tools/gopackagesdriver/proto/build_event_stream"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/tools/go/packages"
+
+	"github.com/bazelbuild/rules_go/go/tools/gopackagesdriver/stdlibmaps"
 )
 
 // FIXME remove. just for debugging

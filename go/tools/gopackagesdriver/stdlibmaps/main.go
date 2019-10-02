@@ -8,13 +8,14 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"sort"
 	"text/template"
 )
 
 var (
 	pkgList = flag.String("pkglist", "", "the file path to packages_list (required)")
 	goroot  = flag.String("goroot", "", "the file path of the GOROOT directory (required)")
-	pkgName = flag.String("pkgname", "main", "the name to use in the 'package' statement in the generated file")
+	pkgName = flag.String("pkgname", "stdlibmaps", "the name to use in the 'package' statement in the generated file")
 )
 
 type tmplData struct {
@@ -62,6 +63,12 @@ func main() {
 			StdPkgBazelLabel: fmt.Sprintf(stdlibLabelFmt, line),
 		})
 	}
+	sort.Slice(
+		pkgs,
+		func(i, j int) bool {
+			return pkgs[i].StdPkgImport < pkgs[j].StdPkgImport
+		},
+	)
 	buf := &bytes.Buffer{}
 	fs, err := ioutil.ReadDir(*goroot)
 	if err != nil {
@@ -71,10 +78,12 @@ func main() {
 	for _, f := range fs {
 		log.Printf("FIXME genfakestdlib 10: %v", f.Name())
 	}
+
+	info := map[string]PkgInfo{}
 	err = mapTmpl.Execute(buf, tmplData{
-		GorootEnv:  os.Getenv("GOROOT"),
-		GenPkgName: *pkgName,
-		Pkgs:       pkgs,
+		GenPkgName:       *pkgName,
+		Pkgs:             pkgs,
+		ImportPathToInfo: info,
 	})
 	if err != nil {
 		log.Fatalf("genfakestdlib: unable to execute the templated file to generate the Go code: %s", err)
@@ -88,17 +97,27 @@ func main() {
 
 var mapTmpl = template.Must(template.New("maps").Parse(`package {{.GenPkgName}}
 
+// StdlibImportPathToBazelLabel maps the Go standard import paths of libraries
+// in the Go stdlib to their equivalent, fake bazel label.
 var StdlibImportPathToBazelLabel = map[string]string{
 	{{ range $i, $pkg := .Pkgs -}}
 	{{ $pkg.StdPkgImport | printf "%#v" }}: {{ $pkg.StdPkgBazelLabel | printf "%#v" }},
 	{{ end }}
 }
 
+// StdlibBazelLabelToImportPath maps to fake bazel labels for libraries in the
+// Go standard library to their equivalent Go standard import path.
 var StdlibBazelLabelToImportPath = map[string]string{
 	{{ range $i, $pkg := .Pkgs -}}
 	{{ $pkg.StdPkgBazelLabel | printf "%#v" }}: {{ $pkg.StdPkgImport | printf "%#v" }},
 	{{ end }}
 }
 
-var stdlibPkg
+// StdlibImportPaths is a sorted list of the import path of every library in the
+// Go standard library.
+var StdlibImportPaths = []string{
+	{{ range $i, $pkg := .Pkgs -}}
+	{{ $pkg.StdPkgImport | printf "%#v" }}
+	{{ end }}
+}
 `))
