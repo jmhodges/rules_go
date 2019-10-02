@@ -455,7 +455,7 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 		}
 	}
 	for _, patt := range stdlibPatterns {
-		if patt == "@go_sdk//stdlib/:builtin" {
+		if patt == "builtin" {
 			// FIXME this doesn't need to exist when we actually build stdlib support
 			bpkg, err := buildBuiltinPackage()
 			if err != nil {
@@ -466,11 +466,11 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 		} else {
 			// FIXME doesn't handle main, obvs, but this is just a bootstrap to see how far
 			// we can get gopls
-			ind = strings.LastIndex(pkgpath, "/")
+			ind := strings.LastIndex(patt, "/")
 			if ind == -1 {
 				ind = 0
 			}
-			name := patt[ind+1:]
+			name := patt[ind:]
 			label := fmt.Sprintf(stdlibLabelFmt, patt)
 			roots[label] = true
 			pkgs[label] = &packages.Package{
