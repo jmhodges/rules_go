@@ -6,11 +6,16 @@ go_binary(
     visibility = ["//visibility:private"]
 )
 
-genrule(
+load(":genfakestdlib.bzl", "gen_stdlib_maps")
+
+gen_stdlib_maps(
     name = "stdlib_maps",
-    srcs = ["@go_sdk//:package_list"],
-    cmd_bash = "$(location :genfakestdlib) -pkglist $(location @go_sdk//:package_list) > $@",
-    outs = ["stdlib.go"],
-    tools = [":genfakestdlib"],
+    out = "stdlib.go",
+    visibility = ["//visibility:private"],
+)
+
+go_library(
+    name = "go_default_library",
+    srcs = ["stdlib.go"]
     visibility = ["//go/tools/gopackagesdriver:__subpackages__"],
 )

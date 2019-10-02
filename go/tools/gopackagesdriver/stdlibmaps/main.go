@@ -13,6 +13,7 @@ import (
 
 var (
 	pkgList = flag.String("pkglist", "", "the file path to packages_list (required)")
+	goroot  = flag.String("goroot", "", "the file path of the GOROOT directory (required)")
 	pkgName = flag.String("pkgname", "main", "the name to use in the 'package' statement in the generated file")
 )
 
@@ -37,10 +38,13 @@ func main() {
 
 	// FIXME actually the smart thing to do would be to make gopackagesdriver
 	// go-gettable by making it a very thing wrapper over a `bazel run` call of
-	// binary in @io_bazel_rules_go, yeah?
+	// binary in @io_bazel_rules_go, yeah? We'd do this so that folks always get stdlib package lists that match their
 	flag.Parse()
 	if *pkgList == "" {
 		log.Fatalf("genfakestdlib: required `-pkgList` argument not provided")
+	}
+	if *goroot == "" {
+		log.Fatalf("genfakestdlib: required `-goroot` argument not provided")
 	}
 	b, err := ioutil.ReadFile(*pkgList)
 	if err != nil {
@@ -59,7 +63,16 @@ func main() {
 		})
 	}
 	buf := &bytes.Buffer{}
+	fs, err := ioutil.ReadDir(*goroot)
+	if err != nil {
+		log.Fatalf("unable to ls GOROOT: %s", err)
+	}
+	log.Printf("FIXME genfakestdlib: %v", fs)
+	for _, f := range fs {
+		log.Printf("FIXME genfakestdlib 10: %v", f.Name())
+	}
 	err = mapTmpl.Execute(buf, tmplData{
+		GorootEnv:  os.Getenv("GOROOT"),
 		GenPkgName: *pkgName,
 		Pkgs:       pkgs,
 	})
@@ -75,15 +88,17 @@ func main() {
 
 var mapTmpl = template.Must(template.New("maps").Parse(`package {{.GenPkgName}}
 
-var stdlibByImportPath = map[string]string{
+var StdlibImportPathToBazelLabel = map[string]string{
 	{{ range $i, $pkg := .Pkgs -}}
 	{{ $pkg.StdPkgImport | printf "%#v" }}: {{ $pkg.StdPkgBazelLabel | printf "%#v" }},
 	{{ end }}
 }
 
-var stdlibByLabel = map[string]string{
+var StdlibBazelLabelToImportPath = map[string]string{
 	{{ range $i, $pkg := .Pkgs -}}
 	{{ $pkg.StdPkgBazelLabel | printf "%#v" }}: {{ $pkg.StdPkgImport | printf "%#v" }},
 	{{ end }}
 }
+
+var stdlibPkg
 `))

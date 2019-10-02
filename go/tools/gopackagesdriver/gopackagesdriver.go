@@ -330,9 +330,9 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 	bazelTargets := make([]string, 0, len(targets))
 	var stdlibPatterns []string
 	for _, targ := range targets {
-		if _, ok := stdlibByImportPath[targ]; ok {
+		if _, ok := stdlibmaps.StdlibBazelLabelToImportPath[targ]; ok {
 			stdlibPatterns = append(stdlibPatterns, targ)
-		} else if importPath, ok := stdlibByLabel[targ]; ok {
+		} else if importPath, ok := stdlibmaps.StdlibImportPathToBazelLabel[targ]; ok {
 			stdlibPatterns = append(stdlibPatterns, importPath)
 		} else {
 			bazelTargets = append(bazelTargets, targ)
@@ -438,7 +438,11 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse JSON response in file %#v from aspect %#v: %s", fp, aspect, err)
 		}
-		pkg := aspectResponseToPackage(resp, pwd)
+		pkg, err := aspectResponseToPackage(resp, pwd)
+		if err != nil {
+			// FIXME should be an Errors field entry, right?
+			return nil, fmt.Errorf("unable to turn the bazel aspect output into a go/package.Package: %s", err)
+		}
 		pkgs[pkg.ID] = pkg
 		for _, r := range resp.Roots {
 			roots[r] = true
@@ -521,24 +525,39 @@ func parseAspectResponse(fp string) (*aspectResponse, error) {
 	return resp, nil
 }
 
-func aspectResponseToPackage(resp *aspectResponse, pwd string) *packages.Package {
+func aspectResponseToPackage(resp *aspectResponse, pwd string) (*packages.Package, error) {
 	// FIXME check all the places that gopls's golist driver (golist.go, etc.)
 	// plops stuff into the Errors struct.
 	imports := make(map[string]*packages.Package, len(resp.Imports))
 	for pkgpath, pkg := range resp.Imports {
-		imports[pkgpath] = aspectResponseToPackage(pkg, pwd)
+		subpkg, err := aspectResponseToPackage(pkg, pwd)
+		if err != nil {
+			// FIXME Errors field?
+			return nil, fmt.Errorf("unable to turn imported pkg %#v returned by the bazel aspect into a go/packages.Package for returning to go/packages.Load: %s", pkgpath, err)
+		}
+		imports[pkgpath] = subpkg
 	}
 
+	gofiles := absolutizeFilePaths(pwd, resp.GoFiles)
+	// builtinImportPaths := extractBuiltinImportPaths(gofiles)
+	// for _, imp := range builtinImportPaths {
+	// 	_, found := imports[imp]
+	// 	if found {
+	// 		continue
+	// 	}
+	// 	bpkg := builtinImportPathToPackage(imp)
+	// 	imports[imp] = bpkg
+	// }
 	return &packages.Package{
 		ID:              resp.ID,
 		Name:            resp.Name,
 		PkgPath:         resp.PkgPath,
-		GoFiles:         absolutizeFilePaths(pwd, resp.GoFiles),
+		GoFiles:         gofiles,
 		CompiledGoFiles: absolutizeFilePaths(pwd, resp.CompiledGoFiles),
 		OtherFiles:      absolutizeFilePaths(pwd, resp.OtherFiles),
 		ExportFile:      filepath.Join(pwd, resp.ExportFile),
 		Imports:         imports,
-	}
+	}, nil
 }
 
 func absolutizeFilePaths(pwd string, fps []string) []string {
