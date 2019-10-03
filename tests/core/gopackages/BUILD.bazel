@@ -5,6 +5,7 @@ go_bazel_test(
     deps = [
         "@com_github_google_go_cmp//cmp:go_default_library",
         "@org_golang_x_tools//go/packages:go_default_library",
+        "//go/tools/bazel:go_default_library", # FIXME remove
     ],
     srcs = ["gopackages_test.go"],
     args = [
@@ -16,11 +17,10 @@ go_bazel_test(
         # FIXME unfortunately, we have to use the querytool.sh directly instead of
         # getting because bazel_testing.Main doesn't seem to copy over the BUILD file
         # for go/tools/gopackagesdriver-nonshim for reasons I dno't yet understand.
-        # "//go/tools/gopackagesdriver-nonshim:querytool",
+        "//go/tools/gopackagesdriver-nonshim:querytool",
 
         # Required in order to bazel_testing to copy it somewhere that the
         # querytool.sh file will see it.
-        # "//go/tools/gopackagesdriver-nonshim:gopackagesdriver-nonshim",
         "//go/tools/gopackagesdriver:gopackagesdriver",
     ],
 )

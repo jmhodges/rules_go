@@ -17,11 +17,15 @@ import (
 	"path"
 )
 
-var bazelBinDir = flag.String("bazelBinDir", "bazel-bin", "the directory to find the go/tools/gopackagesdriver-nonshim/querytool.sh script in")
+var bazelBinDirFlag = flag.String("bazelBinDir", "bazel-bin/external/io_bazel_rules_go/", "the directory to find the go/tools/gopackagesdriver-nonshim/querytool.sh script in")
 
 func main() {
 	if len(os.Args) < 2 {
 		log.Fatalf("gopackagesdriver: expected to be called with a go/packages pattern to query")
+	}
+	bazelBinDir := *bazelBinDirFlag
+	if envBin := os.Getenv("BAZEL_BIN_DIR"); envBin != "" {
+		bazelBinDir = envBin
 	}
 	// We call out to gopackagesdriver-nonshim so that it can poke around in
 	// GOROOT, to keep gopackagesdriver and the stdlib package list up to date
@@ -50,13 +54,15 @@ func main() {
 		log.Fatalf("gopackagesdriver: error building gopackagesdriver bazel tooling: %v", err)
 	}
 
+	printOutInfoFIXME()
+
 	// We have to do this seperate command instead of just calling it with
 	// `bazel run` because that will change the PWD to inside the bazel output
 	// directory (generally, that's "./bazel-out").  FIXME an alternative I've
 	// not tried is passing down down PWD as an argument and using it as the
 	// argument to a cd call inside querytool.sh
 	cmd := exec.Command(
-		path.Join(*bazelBinDir, "/go/tools/gopackagesdriver-nonshim/querytool.sh"),
+		path.Join(bazelBinDir, "/go/tools/gopackagesdriver-nonshim/querytool.sh"),
 		os.Args[1:]...,
 	)
 	cmd.Stdin = os.Stdin
@@ -64,6 +70,17 @@ func main() {
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		log.Fatalf("gopackagesdriver: error running gopackagesdriver bazel tooling: %v", err)
+	}
+
+}
+
+// FIXME delete
+func printOutInfoFIXME() {
+	cmd := exec.Command("bazel", "info")
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		log.Fatalf("gopackagesdriver: whoops %s", err)
 	}
 
 }

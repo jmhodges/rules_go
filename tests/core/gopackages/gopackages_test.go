@@ -6,10 +6,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/bazelbuild/rules_go/go/tools/bazel" // FIXME remove
 	"github.com/bazelbuild/rules_go/go/tools/bazel_testing"
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/tools/go/packages"
@@ -88,16 +90,24 @@ var foo = int(C.foo)
 
 // FIXME rename file to gopackagesdriver_test.go
 func TestSinglePkgPattern(t *testing.T) {
+	rf, rerr := bazel.ListRunfiles()
+	if rerr != nil {
+		t.Fatalf("FIXME ListRunfiles failed: %s", rerr)
+	} else {
+		t.Logf("FIXME wtf %s", rf)
+	}
+
+	foo, err := bazel_testing.BazelOutput("info")
+	if err != nil {
+		t.Fatalf("FIXME bazel info failed with: %s", err)
+	} else {
+		t.Logf("FIXME oh we got something: %s", foo)
+	}
+	t.Logf("FIXME hrm we are in PWD %#v", os.Getenv("PWD"))
 	// check we can actually build :hello
 	if err := bazel_testing.RunBazel("build", "//:hello"); err != nil {
 		t.Fatalf("unable to build //:hello normally: %s", err)
 	}
-	if bs, err := bazel_testing.BazelOutput("query", "@io_bazel_rules_go//..."); err != nil {
-		t.Fatalf("unable to do rules_go build or query thing: %s\n%s", err, string(bs)) // FIXME
-	} else {
-		t.Logf("query output!: %s", string(bs))
-	}
-
 	driverPath, err := getDriverPath()
 	if err != nil {
 		t.Fatal(err)
@@ -131,6 +141,14 @@ func TestSinglePkgPattern(t *testing.T) {
 	expectedGoFiles := []string{"hello.go"}
 	if !compareFiles(expectedGoFiles, pkg.GoFiles) {
 		t.Errorf("GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
+	}
+	for _, fp := range pkg.GoFiles {
+		f, err := os.Open(fp)
+		if err != nil {
+			t.Errorf("Gofiles, %#v is unreadable: %s", fp, err)
+			continue
+		}
+		f.Close()
 	}
 }
 
@@ -384,7 +402,7 @@ func TestStdlib(t *testing.T) {
 	}
 }
 
-// FIXME delete. this is now how to get this going.
+// FIXME add to init or something
 //
 // FIXME unfortunately, we have to use the querytool.sh directly instead of
 // getting because bazel_testing.Main doesn't seem to copy over the BUILD file
@@ -415,12 +433,17 @@ func compareFiles(expected, actual []string) bool {
 	return true
 }
 
-const srcFilePrefix = "/execroot/io_bazel_rules_go/bazel-out/darwin-fastbuild/bin/tests/core/gopackages/darwin_amd64_stripped/gopackages_test.runfiles/io_bazel_rules_go/"
+const srcFilePrefix = "bazel_testing/bazel_go_test/main/"
 
 func compareFile(expected, actual string) bool {
-	ind := strings.Index(actual, srcFilePrefix)
-	if ind == -1 || expected != actual[ind+len(srcFilePrefix):] {
-		return false
+	pwd, err := os.Getwd()
+	if err != nil {
+		return false // FIXME maybe don't do this?
 	}
-	return true
+	return filepath.Join(pwd, expected) == actual
+	// ind := strings.Index(actual, srcFilePrefix)
+	// if ind == -1 || expected != actual[ind+len(srcFilePrefix):] {
+	// 	return false
+	// }
+	// return true
 }

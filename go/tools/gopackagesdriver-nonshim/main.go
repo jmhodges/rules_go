@@ -339,6 +339,10 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 			bazelTargets = append(bazelTargets, targ)
 		}
 	}
+
+	// FIXME handle len(targets) == 0 explicilty. right now it's just a bunch of
+	// code to move around, so I'm skipping it since it's just a warning from
+	// bazel.
 	log.Println("FIXME packagesFromBazelTargets 010 bazelTargets:", bazelTargets, "stdlibPatterns:", stdlibPatterns)
 	cmd := exec.Command("bazel", "build")
 	cmd.Args = append(cmd.Args, "--aspects="+aspect)
