@@ -5,8 +5,8 @@ package build_event_stream
 
 import (
 	fmt "fmt"
-	command_line "github.com/bazelbuild/rules_go/go/tools/gopackagesdriver/proto/command_line"
-	invocation_policy "github.com/bazelbuild/rules_go/go/tools/gopackagesdriver/proto/invocation_policy"
+	command_line "github.com/bazelbuild/rules_go/go/tools/gopackagesdriver-nonshim/proto/command_line"
+	invocation_policy "github.com/bazelbuild/rules_go/go/tools/gopackagesdriver-nonshim/proto/invocation_policy"
 	proto "github.com/golang/protobuf/proto"
 	math "math"
 )

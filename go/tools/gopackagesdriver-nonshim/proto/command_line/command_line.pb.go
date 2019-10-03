@@ -5,7 +5,7 @@ package command_line
 
 import (
 	fmt "fmt"
-	option_filters "github.com/bazelbuild/rules_go/go/tools/gopackagesdriver/proto/option_filters"
+	option_filters "github.com/bazelbuild/rules_go/go/tools/gopackagesdriver-nonshim/proto/option_filters"
 	proto "github.com/golang/protobuf/proto"
 	math "math"
 )
