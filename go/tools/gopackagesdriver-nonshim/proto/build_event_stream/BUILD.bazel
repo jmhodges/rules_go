@@ -11,3 +11,10 @@ go_library(
         "@com_github_golang_protobuf//proto:go_default_library",
     ],
 )
+
+filegroup(
+    name = "all_files",
+    testonly = True,
+    srcs = glob(["**"]),
+    visibility = ["//visibility:public"],
+)

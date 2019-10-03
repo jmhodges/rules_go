@@ -20,3 +20,11 @@ go_library(
     importpath = "github.com/bazelbuild/rules_go/go/tools/gopackagesdriver-nonshim/stdlibmaps",
     visibility = ["//go/tools/gopackagesdriver-nonshim:__subpackages__"],
 )
+
+
+filegroup(
+    name = "all_files",
+    testonly = True,
+    srcs = glob(["**"]),
+    visibility = ["//visibility:public"],
+)

@@ -92,6 +92,12 @@ func TestSinglePkgPattern(t *testing.T) {
 	if err := bazel_testing.RunBazel("build", "//:hello"); err != nil {
 		t.Fatalf("unable to build //:hello normally: %s", err)
 	}
+	if bs, err := bazel_testing.BazelOutput("query", "@io_bazel_rules_go//..."); err != nil {
+		t.Fatalf("unable to do rules_go build or query thing: %s\n%s", err, string(bs)) // FIXME
+	} else {
+		t.Logf("query output!: %s", string(bs))
+	}
+
 	driverPath, err := getDriverPath()
 	if err != nil {
 		t.Fatal(err)
@@ -289,16 +295,6 @@ func TestMultiplePatterns(t *testing.T) {
 }
 
 func TestStdlib(t *testing.T) {
-	// err := bazel_testing.RunBazel("run", "@io_bazel_rules_go//go/tools/gopackagesdriver", "--script_path='./gopackagesdriver'")
-	// if err != nil {
-	// 	t.Fatalf("unable to build gopackagesdriver in test bazel setup: %s", err)
-	// }
-	// defer func() {
-	// 	err := os.Remove("gopackagesdriver")
-	// 	if err != nil {
-	// 		t.Errorf("unable to remove gopackagesdriver script")
-	// 	}
-	// }()
 	testcases := []struct {
 		inputPatterns []string
 		mode          packages.LoadMode
@@ -389,6 +385,10 @@ func TestStdlib(t *testing.T) {
 }
 
 // FIXME delete. this is now how to get this going.
+//
+// FIXME unfortunately, we have to use the querytool.sh directly instead of
+// getting because bazel_testing.Main doesn't seem to copy over the BUILD file
+// for go/tools/gopackagesdriver-nonshim for reasons I dno't yet understand.
 func getDriverPath() (string, error) {
 	if *goPkgDriverPath == "" {
 		return "", errors.New("-goPkgDriverPath arg was not passed to the test binary")

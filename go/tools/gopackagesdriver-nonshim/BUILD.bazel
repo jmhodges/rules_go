@@ -18,3 +18,19 @@ querytool_in_go_env(
     name = "querytool",
     visibility = ["//visibility:public"],
 )
+
+filegroup(
+    name = "all_files",
+    testonly = True,
+    srcs = glob(["**"]) +
+    [
+        "//go/tools/gopackagesdriver-nonshim/stdlibmaps:all_files",
+
+        # FIXME ditch these by not checking in the generated protobuf code?
+        "//go/tools/gopackagesdriver-nonshim/proto/build_event_stream:all_files",
+        "//go/tools/gopackagesdriver-nonshim/proto/command_line:all_files",
+        "//go/tools/gopackagesdriver-nonshim/proto/invocation_policy:all_files",
+        "//go/tools/gopackagesdriver-nonshim/proto/option_filters:all_files",
+    ],
+    visibility = ["//visibility:public"],
+)

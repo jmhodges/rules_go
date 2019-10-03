@@ -4,8 +4,14 @@ go_binary(
     name = "gopackagesdriver",
     srcs = ["main.go"],
     visibility = ["//visibility:public"],
-    deps = [],
     data = [
         "//go/tools/gopackagesdriver-nonshim:querytool",
     ]
+)
+
+filegroup(
+    name = "all_files",
+    testonly = True,
+    srcs = glob(["**"]),
+    visibility = ["//visibility:public"],
 )
