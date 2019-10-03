@@ -5,9 +5,16 @@ go_binary(
     srcs = ["main.go"],
     visibility = ["//visibility:public"],
     deps = [
-        "//go/tools/gopackagesdriver/stdlibmaps:go_default_library",
-        "//go/tools/gopackagesdriver/proto/build_event_stream:go_default_library",
+        "//go/tools/gopackagesdriver-nonshim/stdlibmaps:go_default_library",
+        "//go/tools/gopackagesdriver-nonshim/proto/build_event_stream:go_default_library",
         "@com_github_golang_protobuf//proto:go_default_library",
         "@org_golang_x_tools//go/packages:go_default_library",
     ],
+)
+
+load(":querytool.bzl", "querytool_in_go_env")
+
+querytool_in_go_env(
+    name = "querytool",
+    visibility = ["//visibility:public"],
 )

@@ -29,7 +29,7 @@ type pkg struct {
 	StdPkgBazelLabel string
 }
 
-const stdlibLabelFmt = "@go_sdk//stdlib/:%s"
+const stdlibLabelFmt = "@go_sdk//stdlibstub/:%s"
 
 func main() {
 	// FIXME using this style means we either have to check the out of this in

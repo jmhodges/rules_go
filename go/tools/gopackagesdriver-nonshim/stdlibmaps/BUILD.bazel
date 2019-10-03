@@ -17,6 +17,6 @@ gen_stdlib_maps(
 go_library(
     name = "go_default_library",
     srcs = ["stdlib.go"],
-    importpath = "github.com/bazelbuild/rules_go/go/tools/gopackagesdriver/stdlibmaps",
-    visibility = ["//go/tools/gopackagesdriver:__subpackages__"],
+    importpath = "github.com/bazelbuild/rules_go/go/tools/gopackagesdriver-nonshim/stdlibmaps",
+    visibility = ["//go/tools/gopackagesdriver-nonshim:__subpackages__"],
 )
