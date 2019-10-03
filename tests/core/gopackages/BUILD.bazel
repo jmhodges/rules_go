@@ -11,5 +11,7 @@ go_bazel_test(
         "-goPkgDriverPath",
         "$(location //go/tools/gopackagesdriver:gopackagesdriver)",
     ],
-    data = ["//go/tools/gopackagesdriver:gopackagesdriver"],
+    data = [
+        "//go/tools/gopackagesdriver:gopackagesdriver",
+    ],
 )
