@@ -19,9 +19,10 @@ var (
 )
 
 type tmplData struct {
-	GenPkgName string
-	Pkgs       []pkg
-	VendorPkgs []pkg
+	GenPkgName             string
+	Pkgs                   []pkg
+	VendorPkgs             []pkg
+	StdlibBazelLabelFormat string
 }
 
 type pkg struct {
@@ -29,7 +30,7 @@ type pkg struct {
 	StdPkgBazelLabel string
 }
 
-const stdlibLabelFmt = "@go_sdk//stdlibstub/:%s"
+const stdlibLabelFmt = "@go_sdk//stdlibstub:%s"
 
 func main() {
 	// FIXME using this style means we either have to check the out of this in
@@ -78,9 +79,10 @@ func main() {
 	)
 	buf := &bytes.Buffer{}
 	err = mapTmpl.Execute(buf, tmplData{
-		GenPkgName: *pkgName,
-		Pkgs:       pkgs,
-		VendorPkgs: vendorPkgs,
+		GenPkgName:             *pkgName,
+		Pkgs:                   pkgs,
+		VendorPkgs:             vendorPkgs,
+		StdlibBazelLabelFormat: stdlibLabelFmt,
 	})
 	if err != nil {
 		log.Fatalf("genfakestdlib: unable to execute the templated file to generate the Go code: %s", err)
@@ -133,4 +135,6 @@ var StdlibImportPaths = []string{
 	{{ $pkg.StdPkgImport | printf "%#v" }},
 	{{ end }}
 }
+
+const StdlibBazelLabelFormat = {{.StdlibBazelLabelFormat | printf "%#v" }}
 `))

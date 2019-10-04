@@ -142,14 +142,6 @@ func TestSinglePkgPattern(t *testing.T) {
 	if !compareFiles(expectedGoFiles, pkg.GoFiles) {
 		t.Errorf("GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
 	}
-	for _, fp := range pkg.GoFiles {
-		f, err := os.Open(fp)
-		if err != nil {
-			t.Errorf("Gofiles, %#v is unreadable: %s", fp, err)
-			continue
-		}
-		f.Close()
-	}
 }
 
 func TestSingleFilePattern(t *testing.T) {
@@ -197,31 +189,29 @@ func TestSingleFilePattern(t *testing.T) {
 	// the environ work done in BazelCmd in the bazel commands inside
 	// gopackagesdriver. Will need to talk to jayconrod et. al. about this.
 
-	/*
-		absPath, err := filepath.Abs("./goodbye_other.go")
-		if err != nil {
-			t.Fatalf("unable to get goodbye_other.go's absolute file path")
-		}
-		pkgs, err = packages.Load(cfg, fmt.Sprintf("file=%s", absPath))
-		if err != nil {
-			t.Fatalf("unable to packages.Load: %s", err)
-		}
-		if len(pkgs) < 1 {
-			t.Fatalf("no packages returned")
-		}
-		if len(pkgs) != 1 {
-			t.Errorf("too many packages returned: want 1, got %d", len(pkgs))
-		}
-		if pkg.ID != expectedID {
-			t.Errorf("absolute path, ID: want %#v, got %#v", expectedID, pkg.ID)
-		}
-		if expectedImportPath != pkg.PkgPath {
-			t.Errorf("abolute path, PkgPath: want %#v, got %#v", expectedImportPath, pkg.PkgPath)
-		}
-		if !compareFiles(expectedGoFiles, pkg.GoFiles) {
-			t.Errorf("absolute path, GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
-		}
-	*/
+	absPath, err := filepath.Abs("./goodbye_other.go")
+	if err != nil {
+		t.Fatalf("unable to get goodbye_other.go's absolute file path")
+	}
+	pkgs, err = packages.Load(cfg, fmt.Sprintf("file=%s", absPath))
+	if err != nil {
+		t.Fatalf("unable to packages.Load: %s", err)
+	}
+	if len(pkgs) < 1 {
+		t.Fatalf("no packages returned")
+	}
+	if len(pkgs) != 1 {
+		t.Errorf("too many packages returned: want 1, got %d", len(pkgs))
+	}
+	if pkg.ID != expectedID {
+		t.Errorf("absolute path, ID: want %#v, got %#v", expectedID, pkg.ID)
+	}
+	if expectedImportPath != pkg.PkgPath {
+		t.Errorf("abolute path, PkgPath: want %#v, got %#v", expectedImportPath, pkg.PkgPath)
+	}
+	if !compareFiles(expectedGoFiles, pkg.GoFiles) {
+		t.Errorf("absolute path, GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
+	}
 }
 
 func TestCompiledGoFilesIncludesCgo(t *testing.T) {
@@ -323,7 +313,7 @@ func TestStdlib(t *testing.T) {
 			packages.NeedName | packages.NeedFiles,
 			[]*packages.Package{
 				&packages.Package{
-					ID:      "@go_sdk//stdlib/:builtin",
+					ID:      "@go_sdk//stdlibstub:builtin",
 					Name:    "builtin",
 					PkgPath: "builtin",
 					GoFiles: []string{"external/go_sdk/src/builtin/builtin.go"},
@@ -331,11 +321,11 @@ func TestStdlib(t *testing.T) {
 			},
 		},
 		{
-			[]string{"@go_sdk//stdlib/:builtin"},
+			[]string{"@go_sdk//stdlibstub:builtin"},
 			packages.NeedName | packages.NeedFiles,
 			[]*packages.Package{
 				&packages.Package{
-					ID:      "@go_sdk//stdlib/:builtin",
+					ID:      "@go_sdk//stdlibstub:builtin",
 					Name:    "builtin",
 					PkgPath: "builtin",
 					GoFiles: []string{"external/go_sdk/src/builtin/builtin.go"},

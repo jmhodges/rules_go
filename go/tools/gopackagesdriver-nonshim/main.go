@@ -474,7 +474,7 @@ func packagesFromBazelTargets(req *driverRequest, targets []string) (*driverResp
 				ind = 0
 			}
 			name := patt[ind:]
-			label := fmt.Sprintf(stdlibLabelFmt, patt)
+			label := fmt.Sprintf(stdlibmaps.StdlibBazelLabelFormat, patt)
 			roots[label] = true
 			pkgs[label] = &packages.Package{
 				ID:      label,
@@ -577,14 +577,9 @@ func absolutizeFilePaths(pwd string, fps []string) []string {
 	return abs
 }
 
-const (
-	stdlibLabelPrefix = "@go_sdk//stdlib/:"
-	stdlibLabelFmt    = stdlibLabelPrefix + "%s"
-)
-
 // FIXME not actually working. this is for gopls.
 func buildBuiltinPackage() (*packages.Package, error) {
-	id := fmt.Sprintf(stdlibLabelFmt, "builtin")
+	id := fmt.Sprintf(stdlibmaps.StdlibBazelLabelFormat, "builtin")
 	return &packages.Package{
 		ID:      id,
 		Name:    "builtin",
