@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bazelbuild/rules_go/go/tools/bazel" // FIXME remove
+	// FIXME remove
 	"github.com/bazelbuild/rules_go/go/tools/bazel_testing"
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/tools/go/packages"
@@ -58,6 +58,14 @@ go_library(
 	cgo = True,
 )
 
+go_library(
+    name = "hello_use",
+    srcs = ["hello_use.go"],
+    deps = [":hello"],
+    importpath = "fakeimportpath/hello_use",
+    visibility = ["//visibility:public"],
+)
+
 -- hello.go --
 package hello
 
@@ -84,26 +92,20 @@ package hascgo
 import "C"
 
 var foo = int(C.foo)
+-- hello_use.go --
+package hello_use
+
+import "hello"
+
+func K() string {
+	hello.A()
+}
 `,
 	})
 }
 
 // FIXME rename file to gopackagesdriver_test.go
 func TestSinglePkgPattern(t *testing.T) {
-	rf, rerr := bazel.ListRunfiles()
-	if rerr != nil {
-		t.Fatalf("FIXME ListRunfiles failed: %s", rerr)
-	} else {
-		t.Logf("FIXME wtf %s", rf)
-	}
-
-	foo, err := bazel_testing.BazelOutput("info")
-	if err != nil {
-		t.Fatalf("FIXME bazel info failed with: %s", err)
-	} else {
-		t.Logf("FIXME oh we got something: %s", foo)
-	}
-	t.Logf("FIXME hrm we are in PWD %#v", os.Getenv("PWD"))
 	// check we can actually build :hello
 	if err := bazel_testing.RunBazel("build", "//:hello"); err != nil {
 		t.Fatalf("unable to build //:hello normally: %s", err)
@@ -113,34 +115,46 @@ func TestSinglePkgPattern(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.Setenv("GOPACKAGESDRIVER", driverPath) // FIXME Use Env and os.Environ
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	cfg := &packages.Config{
-		Mode:    packages.NeedName | packages.NeedFiles,
-		Context: ctx,
+	testcases := []struct {
+		inputPatterns string
+		mode          packages.LoadMode
+		outputPkg     *packages.Package
+	}{
+		{
+			"//:hello",
+			packages.NeedName,
+			&packages.Package{
+				ID:      "//:hello",
+				Name:    "hello",
+				PkgPath: "fakeimportpath/hello",
+				GoFiles: []string{abs("hello.go")},
+			},
+		},
 	}
-	pkgs, err := packages.Load(cfg, "//:hello")
-	if err != nil {
-		t.Fatalf("unable to packages.Load: %s", err)
-	}
-	if len(pkgs) < 1 {
-		t.Fatalf("no packages returned")
-	}
-	if len(pkgs) != 1 {
-		t.Errorf("too many packages returned: want 1, got %d", len(pkgs))
-	}
-	pkg := pkgs[0]
-	expectedID := "//:hello"
-	if pkg.ID != expectedID {
-		t.Errorf("ID: want %#v, got %#v", expectedID, pkg.ID)
-	}
-	expectedImportPath := "fakeimportpath/hello"
-	if expectedImportPath != pkg.PkgPath {
-		t.Errorf("PkgPath: want %#v, got %#v", expectedImportPath, pkg.PkgPath)
-	}
-	expectedGoFiles := []string{"hello.go"}
-	if !compareFiles(expectedGoFiles, pkg.GoFiles) {
-		t.Errorf("GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
+
+	for tcInd, tc := range testcases {
+		t.Run(fmt.Sprintf("test-%d", tcInd),
+			func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+				defer cancel()
+				cfg := &packages.Config{
+					Mode:    packages.NeedName | packages.NeedFiles,
+					Context: ctx,
+				}
+				pkgs, err := packages.Load(cfg, "//:hello")
+				if err != nil {
+					t.Fatalf("unable to packages.Load: %s", err)
+				}
+				if len(pkgs) < 1 {
+					t.Fatalf("no packages returned")
+				}
+				if len(pkgs) != 1 {
+					t.Errorf("too many packages returned: want 1, got %d", len(pkgs))
+				}
+				if !cmp.Equal(tc.outputPkg, pkgs[0]) {
+					t.Errorf("Packages didn't match, diff: %s", cmp.Diff(tc.outputPkg, pkgs[0]))
+				}
+			})
 	}
 }
 
@@ -303,6 +317,12 @@ func TestMultiplePatterns(t *testing.T) {
 }
 
 func TestStdlib(t *testing.T) {
+	fmtPkg := &packages.Package{
+		ID:      "@go_sdk//stdlibstub:fmt",
+		Name:    "fmt",
+		PkgPath: "fmt",
+	}
+
 	testcases := []struct {
 		inputPatterns []string
 		mode          packages.LoadMode
@@ -316,7 +336,7 @@ func TestStdlib(t *testing.T) {
 					ID:      "@go_sdk//stdlibstub:builtin",
 					Name:    "builtin",
 					PkgPath: "builtin",
-					GoFiles: []string{"external/go_sdk/src/builtin/builtin.go"},
+					GoFiles: []string{abs("external/go_sdk/src/builtin/builtin.go")},
 				},
 			},
 		},
@@ -328,7 +348,22 @@ func TestStdlib(t *testing.T) {
 					ID:      "@go_sdk//stdlibstub:builtin",
 					Name:    "builtin",
 					PkgPath: "builtin",
-					GoFiles: []string{"external/go_sdk/src/builtin/builtin.go"},
+					GoFiles: []string{abs("external/go_sdk/src/builtin/builtin.go")},
+				},
+			},
+		},
+		{
+			[]string{"builtin"},
+			packages.NeedName | packages.NeedFiles | packages.NeedImports,
+			[]*packages.Package{
+				&packages.Package{
+					ID:      "@go_sdk//stdlibstub:builtin",
+					Name:    "builtin",
+					PkgPath: "builtin",
+					GoFiles: []string{abs("external/go_sdk/src/builtin/builtin.go")},
+					Imports: map[string]*packages.Package{
+						"fmt": fmtPkg,
+					},
 				},
 			},
 		},
@@ -342,54 +377,33 @@ func TestStdlib(t *testing.T) {
 	// FIXME using Config.Env doesn't work because gopackagesdriver isn't found
 	// in the interior bazel run.
 	for tcInd, tc := range testcases {
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-		cfg := &packages.Config{
-			Mode:    tc.mode,
-			Context: ctx,
-			Env:     append(os.Environ(), fmt.Sprintf("GOPACKAGESDRIVER=%s", driverPath)),
-		}
-		t.Logf("FIXME inputpatterns: %q", tc.inputPatterns)
-		pkgs, err := packages.Load(cfg, tc.inputPatterns...)
-		if err != nil {
-			t.Errorf("testcase#%d Load: %s", tcInd, err)
-			continue
-		}
-		if len(tc.outputPkgs) != len(pkgs) {
-			t.Errorf("testcase#%d num pkgs: want %d pkgs, got %d pkgs (want %q, got %q)", tcInd, len(tc.outputPkgs), len(pkgs), tc.outputPkgs, pkgs)
-		} else {
-			for i, exp := range tc.outputPkgs {
-				opt := cmp.FilterPath(
-					func(p cmp.Path) bool {
-						switch p.Last().String() {
-						case ".GoFiles", ".CompiledGoFiles", ".OtherFiles":
-							return true
-						}
-						return false
-					},
-					cmp.Transformer("RelativizeFilePath", func(absPaths []string) []string {
-						out := make([]string, len(absPaths))
-						for i, absPath := range absPaths {
-							if absPath == "" {
-								out[i] = ""
-								continue
-							}
-							ind := strings.Index(absPath, srcFilePrefix)
-							if ind == -1 {
-								out[i] = absPath
-								continue
-							}
-							out[i] = absPath[ind+len(srcFilePrefix):]
-						}
-						return out
-					}),
-				)
-				if !cmp.Equal(exp, pkgs[i], opt) {
-					t.Errorf("testcase#%d package %d, diff: %s", tcInd, i, cmp.Diff(exp, pkgs[i]))
+		t.Run(fmt.Sprintf("test-%d-%s", tcInd, strings.Join(tc.inputPatterns, ",")),
+			func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+				defer cancel()
+				cfg := &packages.Config{
+					Mode:       tc.mode,
+					Context:    ctx,
+					BuildFlags: []string{"--verbose_failures"},
+					Env:        append(os.Environ(), fmt.Sprintf("GOPACKAGESDRIVER=%s", driverPath)),
 				}
-			}
-		}
+				pkgs, err := packages.Load(cfg, tc.inputPatterns...)
+				if err != nil {
+					t.Errorf("Load: %s", err)
+					return
+				}
+				if len(tc.outputPkgs) != len(pkgs) {
+					t.Errorf("num pkgs: want %d pkgs, got %d pkgs (want %q, got %q)", len(tc.outputPkgs), len(pkgs), tc.outputPkgs, pkgs)
+				} else {
+					for i, exp := range tc.outputPkgs {
+						if !cmp.Equal(exp, pkgs[i]) {
+							t.Errorf("package %d, diff: %s", i, cmp.Diff(exp, pkgs[i]))
+						}
+					}
+				}
+			})
 	}
+
 }
 
 // FIXME add to init or something
@@ -423,17 +437,21 @@ func compareFiles(expected, actual []string) bool {
 	return true
 }
 
-const srcFilePrefix = "bazel_testing/bazel_go_test/main/"
-
 func compareFile(expected, actual string) bool {
 	pwd, err := os.Getwd()
 	if err != nil {
 		return false // FIXME maybe don't do this?
 	}
 	return filepath.Join(pwd, expected) == actual
-	// ind := strings.Index(actual, srcFilePrefix)
-	// if ind == -1 || expected != actual[ind+len(srcFilePrefix):] {
-	// 	return false
-	// }
-	// return true
 }
+
+func abs(filePath string) string {
+	pwd, err := os.Getwd()
+	if err != nil {
+		panic(fmt.Sprintf("unable to get current working directory: %s", err))
+	}
+	return filepath.Join(pwd, filePath)
+}
+
+// FIXME use abs in expected values instead of the wild cmp stuff.
+const srcFilePrefix = "bazel_testing/bazel_go_test/main/"

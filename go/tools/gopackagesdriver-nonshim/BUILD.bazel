@@ -14,6 +14,10 @@ go_binary(
 
 load(":querytool.bzl", "querytool_in_go_env")
 
+go_genrule(
+    name = "querytool2",
+    tools = [":gopackagesdriver-nonshim"],
+)
 querytool_in_go_env(
     name = "querytool",
     visibility = ["//visibility:public"],

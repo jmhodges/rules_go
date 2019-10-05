@@ -17,6 +17,10 @@ echo "RUNFILES is ${RUNFILES}" > /dev/stderr
 """
     bashvars = []
     for var in sorted(go.env.keys()):
+        # FIXME i think this sets up GOOS and GOARCH's that are for the host
+        # machine, and not the target machine. Think we'd benefit that
+        # go_genrule that set ups toolchains and GOOS and GOARCH the way we need
+        # them.
         if var != "PATH":
             bashvars.append("export %s=%s\n" % (var, go.env[var]))
     script_content += "".join(bashvars)

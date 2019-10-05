@@ -31,11 +31,11 @@ def _gopackagesdriver_files_nodeps_aspect_impl(target, ctx):
         return []
     # We have a library and we need to compile it in a new mode
     library = target[GoLibrary]
-    resp = _basic_driver_response(target, source, library)
+    resp = _basic_driver_response(ctx, target, source, library)
 
     json_serialized = struct(**resp).to_json()
     # FIXME go_binary that embeds a go_library will cause the same contents
-    # (like source file names) to be written into two different files under
+    # (like source file names) to be written into tbwo different files under
     # different names. This will likely confuse tools, right? It's not clear how
     # to distinguish go_test from go_binary if we just ignore go_binary's and
     # we'd still have to handle the case where go_binary directly has the srcs
@@ -50,14 +50,15 @@ def _gopackagesdriver_files_nodeps_aspect_impl(target, ctx):
 
 def _gopackagesdriver_export_nodeps_aspect_impl(target, ctx):
     go = go_context(ctx, ctx.rule.attr)
-
+    print("FIXME wtf is", dir(ctx.rule.attr))
+    print("FIXME deps is", ctx.rule.attr.deps)
     source = target[GoSource] if GoSource in target else None
     if not GoLibrary in target:
         # Not a rule we can do anything with
         return []
     # We have a library and we need to compile it in a new mode
     library = target[GoLibrary]
-    resp = _basic_driver_response(target, source, library)
+    resp = _basic_driver_response(ctx, target, source, library)
     archive = target[GoArchive]
     export_resp = _export_driver_response(go, target.label, archive)
     resp.update(**export_resp)
@@ -67,7 +68,7 @@ def _gopackagesdriver_export_nodeps_aspect_impl(target, ctx):
     json_file = ctx.actions.declare_file(filename)
     ctx.actions.write(json_file, json_serialized)
     archives = [archive.data.file]
-        
+
     return [
         OutputGroupInfo(
             gopackagesdriver_archives = archives,
@@ -77,7 +78,7 @@ def _gopackagesdriver_export_nodeps_aspect_impl(target, ctx):
 
 def _gopackagesdriver_export_aspect_impl(target, ctx):
     go = go_context(ctx, ctx.rule.attr)
-    
+
     resp = _gopackagesdriver_export_aspect_impl_go(target, ctx, go, True)
     if resp == None:
         return []
@@ -89,7 +90,7 @@ def _gopackagesdriver_export_aspect_impl(target, ctx):
     ctx.actions.write(json_file, json_serialized)
 
     archives = [target[GoArchive].data.file]
-    for targ in target.deps:
+    for targ in ctx.rule.attr.deps:
         if targ[GoArchive] != None:
             archives.append(targ[GoArchive].data.file)
 
@@ -108,7 +109,7 @@ def _gopackagesdriver_export_aspect_impl_go(target, ctx, go, check_deps):
         return None
     # We have a library and we need to compile it in a new mode
     library = target[GoLibrary]
-    resp = _basic_driver_response(target, source, library)
+    resp = _basic_driver_response(ctx, target, source, library)
     archive = target[GoArchive]
     export_resp = _export_driver_response(go, target.label, archive)
     resp.update(**export_resp)
@@ -123,8 +124,17 @@ def _gopackagesdriver_export_aspect_impl_go(target, ctx, go, check_deps):
                 
     return resp
 
+def _label_to_string(label):
+    label_parts = []
+    if label.workspace_name != "":
+        label_parts.append("@"+label.workspace_name)
+    label_parts.append("//"+label.package)
+    label_parts.append(":"+label.name)
+    label_string = "".join(label_parts)
+    return label_string
 
-def _basic_driver_response(target, source, library):
+
+def _basic_driver_response(ctx, target, source, library):
     # FIXME rules_go question: is this method of getting pkg_name acceptable or do we need to do
     # more interrogation of the source?
 
@@ -147,15 +157,12 @@ def _basic_driver_response(target, source, library):
             go_srcs.append(src.path)
         else:
             nongo_srcs.append(src.path)
-    label_parts = []
-    roots = []
-    if target.label.workspace_name != "":
-        label_parts.append("@"+target.label.workspace_name)
-        roots.append(target.label.workspace_root)
-    label_parts.append("//"+target.label.package)
-    label_parts.append(":"+target.label.name)
-    label_string = "".join(label_parts)
 
+    label_string = _label_to_string(target.label)
+    deps_labels = []
+    for deptarg in ctx.rule.attr.deps:
+        deps_labels.append(_label_to_string(deptarg.label))
+        
     return {
         "id": label_string,
         "name": pkg_name,
@@ -163,12 +170,13 @@ def _basic_driver_response(target, source, library):
                                        # the other _export aspect?
         "go_files": go_srcs,
         "other_files": nongo_srcs,
-        "roots": [label_string],
+        "deps": deps_labels,
     }
 
 def _export_driver_response(go, target_label, archive):
     if go.nogo == None:
-        # FIXME how to require nogo? Should we make a way to get export_file without it?
+        # FIXME wait, didn't we fix this so we don't need nogo anymore because
+        # we use the normal archive? check!
         fail(msg = "a nogo target must be passed to `go_register_toolchains` with at least `vet = True` or some other analysis tool in place in order to get type check export data requested by this aspect")
     if archive.data.export_file == None:
         fail(msg = "out_export wasn't set on given GoArchive for %s" % target_label)
@@ -199,17 +207,18 @@ gopackagesdriver_export_nodeps_aspect = aspect(
     _gopackagesdriver_export_nodeps_aspect_impl,
     toolchains = ["@io_bazel_rules_go//go:toolchain"],
     required_aspect_providers = ["GoArchive", "GoArchiveData"],
-    # FIXME set up `provides` arg
+    # FIXME set up `provides` arg?
 )
 
 gopackagesdriver_export_aspect = aspect(
-    _gopackagesdriver_export_nodeps_aspect_impl,
+    _gopackagesdriver_export_aspect_impl,
     toolchains = ["@io_bazel_rules_go//go:toolchain"],
     attr_aspects = ["deps"],
     required_aspect_providers = ["GoArchive", "GoArchiveData"],
     # FIXME set up `provides` arg
 )
 
+# FIXME delete this
 def _debug_impl(target, ctx):
     go = go_context(ctx, ctx.rule.attr)
 
@@ -229,7 +238,7 @@ def _debug_impl(target, ctx):
     print("FIXME 051 srcs", go.sdk.srcs)
     return [] # [OutputGroupInfo(welp=[foobar])]
 
-debug_aspect = aspect(
+debug_aspect = aspect( # FIXME delete this aspect
     _debug_impl,
     attr_aspects = [],
     toolchains = ["@io_bazel_rules_go//go:toolchain"],
