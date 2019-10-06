@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go/tools/bazel_testing:def.bzl", "go_bazel_test")
+
+go_bazel_test(
+    name = "dataargtest_test",
+    deps = [],
+    srcs = ["dataargtest_test.go"],
+    args = [
+        "-md5Path",
+        "$(location //go/tools/builders:md5sum)",
+    ],
+    data = [
+        "//go/tools/builders:md5sum",
+    ],
+)
