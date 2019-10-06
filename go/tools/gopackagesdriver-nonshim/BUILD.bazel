@@ -12,16 +12,20 @@ go_binary(
     ],
 )
 
-load(":querytool.bzl", "querytool_in_go_env")
+load(":querytool.bzl", "go_env_cmd")
 
-go_genrule(
-    name = "querytool2",
+go_env_cmd(
+    name = "querytool",
+    cmd = "$(location :gopackagesdriver-nonshim) $@",
+    out = "querytool.sh",
     tools = [":gopackagesdriver-nonshim"],
 )
-querytool_in_go_env(
-    name = "querytool",
-    visibility = ["//visibility:public"],
-)
+
+# FIXME delete
+# querytool_in_go_env(
+#     name = "querytool",
+#     visibility = ["//visibility:public"],
+# )
 
 filegroup(
     name = "all_files",
