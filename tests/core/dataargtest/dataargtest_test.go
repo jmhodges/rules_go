@@ -2,12 +2,13 @@ package main
 
 import (
 	"flag"
+	"os"
 	"testing"
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel_testing"
 )
 
-var md5sumFlag = flag.String("md5Path", "", "")
+var md5Path = flag.String("md5Path", "", "")
 
 func TestMain(m *testing.M) {
 	bazel_testing.TestMain(m, bazel_testing.Args{
@@ -35,4 +36,9 @@ func TestGoldenPath(t *testing.T) {
 	if err := bazel_testing.RunBazel("build", "//:hello"); err != nil {
 		t.Fatalf("unable to build //:hello normally: %s", err)
 	}
+	f, err := os.Open(*md5Path)
+	if err != nil {
+		t.Errorf("unable to open md5sum file: %s", err)
+	}
+	f.Close()
 }
