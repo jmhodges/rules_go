@@ -19,6 +19,7 @@ go_env_cmd(
     cmd = "$(location :gopackagesdriver-nonshim) $@",
     out = "querytool.sh",
     tools = [":gopackagesdriver-nonshim"],
+    visibility = ["//visibility:public"],
 )
 
 # FIXME delete
