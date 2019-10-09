@@ -11,14 +11,17 @@ def _go_env_cmd_impl(ctx):
     go = go_context(ctx)
     tmpl = """#!/bin/bash
 
+execPrefix=""
+if [[ ! -z "${{BAZEL_EXEC_ROOT}}" ]]; then
+  execPrefix="${{BAZEL_EXEC_ROOT}}/"
+fi
+
 export GOOS="{goos}"
 export GOARCH="{goarch}"
-export GOROOT="{goroot}"
+export GOROOT="${{execPrefix}}/{goroot}"
 export GO111MODULE="off"
-export PATH="$RUNFILES/{godir}:$PATH"
-
-which go
-
+export PATH="${{GOROOT}}/bin:$PATH"
+echo "BAZEL_EXEC_ROOT is ${{BAZEL_EXEC_ROOT}}" > /dev/stderr
 {cmd}
 """
     runfiles_raw = go.sdk.srcs + go.sdk.libs + go.sdk.headers
@@ -50,7 +53,10 @@ which go
 # go_env_cmd generates a shell script that wraps cmd, the given bash command,
 # with an environment that is suitable for Go tooling. It includes GOROOT (with
 # all sources, libraries, and headers), GOARCH, and GOOS, modules are turned
-# off, and the go binary is available in $PATH.
+# off, and the go binary is available in $PATH. If the built command is run
+# outside of a `bazel run`, it requires the environment varaible BAZEL_EXEC_ROOT
+# to be set to the value value of `bazel info execution_root` in order to use
+# the correct `go` binary.
 go_env_cmd = go_rule(
     _go_env_cmd_impl,
     attrs = {

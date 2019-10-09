@@ -1,13 +1,16 @@
 package gopackages_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -151,12 +154,31 @@ func TestSinglePkgPattern(t *testing.T) {
 				if len(pkgs) != 1 {
 					t.Errorf("too many packages returned: want 1, got %d", len(pkgs))
 				}
-				if !cmp.Equal(tc.outputPkg, pkgs[0]) {
-					t.Errorf("Packages didn't match, diff: %s", cmp.Diff(tc.outputPkg, pkgs[0]))
+				if !cmp.Equal(tc.outputPkg, pkgs[0], pkgCmpOpt) {
+					t.Errorf("Packages didn't match, diff: %s", cmp.Diff(tc.outputPkg, pkgs[0], pkgCmpOpt))
 				}
 			})
 	}
 }
+
+var pkgCmpOpt = cmp.FilterPath(
+	func(p cmp.Path) bool {
+		switch p.Last().String() {
+		case ".GoFiles", ".CompiledGoFiles", ".OtherFiles":
+			return true
+		}
+		return false
+	},
+	cmp.Transformer(
+		"ResolveSymlinksIfTheyExist",
+		func(xs []string) []string {
+			for i, x := range xs {
+				xs[i] = resolveLink(x)
+			}
+			return xs
+		},
+	),
+)
 
 func TestSingleFilePattern(t *testing.T) {
 	// check we can actually build :goodbye
@@ -317,6 +339,14 @@ func TestMultiplePatterns(t *testing.T) {
 }
 
 func TestStdlib(t *testing.T) {
+	// FIXME
+	root, err := bazel_testing.BazelOutput("info", "execution_root")
+	if err != nil {
+		t.Fatalf("unable to get bazel execution_root: %s", err)
+	}
+	t.Logf("FIXME execution_root is %#v", string(root))
+
+	os.Setenv("BAZEL_DROP_TEST_ENV", "1")
 	fmtPkg := &packages.Package{
 		ID:      "@go_sdk//stdlibstub:fmt",
 		Name:    "fmt",
@@ -374,6 +404,9 @@ func TestStdlib(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// os.Setenv("BAZEL_DROP_TEST_ENV", "1") // FIXME Use Env and os.Environ
+
 	// FIXME using Config.Env doesn't work because gopackagesdriver isn't found
 	// in the interior bazel run.
 	for tcInd, tc := range testcases {
@@ -384,6 +417,7 @@ func TestStdlib(t *testing.T) {
 				cfg := &packages.Config{
 					Mode:       tc.mode,
 					Context:    ctx,
+					Logf:       t.Logf,
 					BuildFlags: []string{"--verbose_failures"},
 					Env:        append(os.Environ(), fmt.Sprintf("GOPACKAGESDRIVER=%s", driverPath)),
 				}
@@ -396,8 +430,8 @@ func TestStdlib(t *testing.T) {
 					t.Errorf("num pkgs: want %d pkgs, got %d pkgs (want %q, got %q)", len(tc.outputPkgs), len(pkgs), tc.outputPkgs, pkgs)
 				} else {
 					for i, exp := range tc.outputPkgs {
-						if !cmp.Equal(exp, pkgs[i]) {
-							t.Errorf("package %d, diff: %s", i, cmp.Diff(exp, pkgs[i]))
+						if !cmp.Equal(exp, pkgs[i], pkgCmpOpt) {
+							t.Errorf("package %d, diff: %s", i, cmp.Diff(exp, pkgs[i], pkgCmpOpt))
 						}
 					}
 				}
@@ -438,20 +472,50 @@ func compareFiles(expected, actual []string) bool {
 }
 
 func compareFile(expected, actual string) bool {
-	pwd, err := os.Getwd()
-	if err != nil {
-		return false // FIXME maybe don't do this?
-	}
-	return filepath.Join(pwd, expected) == actual
+	return abs(expected) == resolveLink(actual)
 }
 
 func abs(filePath string) string {
-	pwd, err := os.Getwd()
-	if err != nil {
-		panic(fmt.Sprintf("unable to get current working directory: %s", err))
+	execRootLock.Lock()
+	defer execRootLock.Unlock()
+	if executionRoot == "" {
+		// executionRoot = os.Getenv("TEST_TMPDIR)
+		// FIXME talk to Jay about a better way of doing this.
+
+		// FIXME follow symlink
+		root, err := bazel_testing.BazelOutput("info", "execution_root")
+		if err != nil {
+			log.Fatalf("unable to get bazel execution_root: %s", err)
+		}
+		executionRoot = string(bytes.TrimSpace(root))
 	}
-	return filepath.Join(pwd, filePath)
+	sym := filepath.Join(executionRoot, filePath)
+	return resolveLink(sym)
+}
+
+func resolveLink(fp string) string {
+	// explicit max amount of checks in case the links loop. Thank you, based
+	// JPL coding standard rule 3, for making me think about this.
+	for i := 0; i < 5; i++ {
+		fi, err := os.Lstat(fp)
+		if err != nil {
+			return fp
+		}
+		if fi.Mode()&os.ModeSymlink != 0 {
+			newFP, err := os.Readlink(fp)
+			if err != nil {
+				return newFP
+			}
+			fp = newFP
+		} else {
+			return fp
+		}
+	}
+	return fp
 }
 
 // FIXME use abs in expected values instead of the wild cmp stuff.
 const srcFilePrefix = "bazel_testing/bazel_go_test/main/"
+
+var executionRoot string
+var execRootLock sync.Mutex

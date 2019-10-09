@@ -132,10 +132,15 @@ type driverResponse struct {
 const fileQueryPrefix = "file="
 
 var (
-	pwd = os.Getenv("PWD")
+	execRoot string
 )
 
 func run(args []string) error {
+	execRoot = os.Getenv("BAZEL_EXEC_ROOT")
+	if execRoot == "" {
+		return fmt.Errorf("gopackagesdriver: environment BAZEL_EXEC_ROOT must be set for commands to work correctly")
+	}
+
 	// Parse command line arguments and driver request sent on stdin.
 	fs := flag.NewFlagSet("gopackagesdriver", flag.ExitOnError)
 	// FIXME figure out how to set a --platforms call?
@@ -151,6 +156,7 @@ func run(args []string) error {
 		// this FIXME instead of thinking about it too much.
 		return errors.New("no patterns specified")
 	}
+
 	var targets, fileQueries []string
 	for _, patt := range patterns {
 		if strings.HasPrefix(patt, fileQueryPrefix) {
@@ -172,6 +178,7 @@ func run(args []string) error {
 	if err := json.Unmarshal(reqData, &req); err != nil {
 		return fmt.Errorf("could not unmarshal driver request: %v", err)
 	}
+
 	log.Println("FIXME driverRequest Modes 001")
 	for _, m := range modes {
 		if req.Mode&m.Mode != 0 {
@@ -240,10 +247,10 @@ func filePathToLabel(fp string) (string, error) {
 	// reject if PWD isn't a prefix of the absolute path
 	fp = filepath.Clean(fp)
 	if filepath.IsAbs(fp) {
-		if !strings.HasPrefix(fp, pwd) {
+		if !strings.HasPrefix(fp, execRoot) {
 			return "", fmt.Errorf("error converting filepath %#v to bazel file label: filepath is absolute but the file doesn't exist in the tree below the current working directory", fp)
 		}
-		fp = strings.TrimPrefix(fp, pwd+"/")
+		fp = strings.TrimPrefix(fp, execRoot+"/")
 	}
 	bs, err := bazelQuery(fp)
 	if err != nil {
@@ -279,9 +286,16 @@ func fileLabelToBazelTargets(label, origFile string) ([]string, error) {
 // FIXME make it so we can conditionally print out all of the commands and args we exec to
 // stderr.
 func bazelQuery(args ...string) ([]byte, error) {
-	cmd := exec.Command("bazel", "query")
+	newArgs := make([]string, 0, len(args)+1)
+	newArgs = append(newArgs, "query")
+	newArgs = append(newArgs, args...)
+	return bazelOutput(newArgs...)
+}
+
+func bazelOutput(args ...string) ([]byte, error) {
+	cmd := exec.Command("bazel")
 	cmd.Args = append(cmd.Args, args...)
-	log.Println("1FIXME bazelQuery 002: bazel query", cmd.Args)
+	log.Println("1FIXME bazelQuery 002: bazel out", cmd.Args)
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	cmd.Stdout = stdout
@@ -291,6 +305,8 @@ func bazelQuery(args ...string) ([]byte, error) {
 		eErr.Stderr = stderr.Bytes()
 		err = &StderrExitError{Err: eErr}
 	}
+	// FIXME just always use os.Stderr?
+	os.Stderr.Write(stderr.Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -499,7 +515,7 @@ func packagesFromBazelTargets(req *driverRequest, bazelTargets []string, pkgs ma
 		if found {
 			continue
 		}
-		pkg := aspectResponseToPackage(resp, pwd)
+		pkg := aspectResponseToPackage(resp, execRoot)
 		if err != nil {
 			// FIXME should be an Errors field entry, right?
 			return fmt.Errorf("unable to turn the bazel aspect output into a go/package.Package: %s", err)
@@ -666,7 +682,7 @@ func buildStdlibPackageFromImportPath(imp string) (*packages.Package, error) {
 			ID:      id,
 			Name:    "builtin",
 			PkgPath: "builtin",
-			GoFiles: absolutizeFilePaths(pwd, []string{"external/go_sdk/src/builtin/builtin.go"}),
+			GoFiles: absolutizeFilePaths(execRoot, []string{"external/go_sdk/src/builtin/builtin.go"}),
 			// pkg builtin never has an export file.
 			ExportFile: "",
 			// pkg builtin never has compiled Go files.
@@ -679,7 +695,7 @@ func buildStdlibPackageFromImportPath(imp string) (*packages.Package, error) {
 			ind = 0
 		}
 		name := imp[ind:]
-		label := fmt.Sprintf(stdlibmaps.StdlibBazelLabelFormat, imp)
+		label := stdlibBazelLabel(imp)
 		return &packages.Package{
 			ID:      label,
 			Name:    name,

@@ -22,12 +22,6 @@ go_env_cmd(
     visibility = ["//visibility:public"],
 )
 
-# FIXME delete
-# querytool_in_go_env(
-#     name = "querytool",
-#     visibility = ["//visibility:public"],
-# )
-
 filegroup(
     name = "all_files",
     testonly = True,
