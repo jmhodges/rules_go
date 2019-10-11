@@ -40,8 +40,10 @@ func main() {
 
 	for _, e := range environ {
 		if dropBazelTestEnv && (strings.HasPrefix(e, "TEST_") || strings.HasPrefix(e, "RUNFILES_")) {
+			log.Println("FIXME Skipping env var:", e)
 			continue
 		}
+		log.Println("FIXME Allowing env var:", e)
 		environ = append(environ, e)
 	}
 
