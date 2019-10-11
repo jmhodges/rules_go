@@ -333,7 +333,7 @@ func packagesFromPatterns(req *driverRequest, targets []string) (*driverResponse
 	// FIXME handle len(targets) == 0 explicilty. right now it's just a bunch of
 	// code to move around, so I'm skipping it since it's just a warning from
 	// bazel.
-	log.Println("FIXME packagesFromBazelTargets 010 bazelTargets:", bazelTargets, "stdlibPatterns:", stdlibPatterns)
+	log.Println("FIXME packagesFromPatterns 010 bazelTargets:", bazelTargets, "stdlibPatterns:", stdlibPatterns)
 	pkgs := make(map[string]*packages.Package)
 	roots := make(map[string]bool)
 
@@ -354,6 +354,8 @@ func packagesFromPatterns(req *driverRequest, targets []string) (*driverResponse
 		}
 	}
 
+	log.Println("FIXME packagesFromPatterns 020", pkgs)
+	log.Println("FIXME packagesFromPatterns 021", roots)
 	sortedPkgs := make([]*packages.Package, 0, len(pkgs))
 	for _, pkg := range pkgs {
 		sortedPkgs = append(sortedPkgs, pkg)
@@ -366,6 +368,10 @@ func packagesFromPatterns(req *driverRequest, targets []string) (*driverResponse
 	for root := range roots {
 		sortedRoots = append(sortedRoots, root)
 	}
+
+	log.Println("FIXME packagesFromPatterns 097", sortedPkgs[0].Imports)
+	log.Println("FIXME packagesFromPatterns 098", sortedPkgs)
+	log.Println("FIXME packagesFromPatterns 099", sortedRoots)
 
 	sort.Strings(sortedRoots)
 	return &driverResponse{
@@ -520,6 +526,7 @@ func packagesFromBazelTargets(req *driverRequest, bazelTargets []string, pkgs ma
 			// FIXME should be an Errors field entry, right?
 			return fmt.Errorf("unable to turn the bazel aspect output into a go/package.Package: %s", err)
 		}
+
 		if (req.Mode & packages.NeedDeps) != 0 {
 			err = aspectResponseAddFullPackagesToImports(resp, pkg)
 			if err != nil {
@@ -627,7 +634,7 @@ func aspectResponseAddIDOnlyPackagesToImports(resp *aspectResponse, pkg *package
 }
 
 func addIDOnlyPackagesToImports(depLabels []string, pkg *packages.Package) error {
-	log.Println("FIXME aspectResponseAddIDOnlyPackagesToImports 1")
+	log.Println("FIXME aspectResponseAddIDOnlyPackagesToImports 1", pkg.GoFiles)
 	for _, fp := range pkg.GoFiles {
 		// FIXME all errors in here should probably be Errors field entries?
 		labels, err := findStdlibBazelLabelsInFile(fp)
@@ -645,6 +652,7 @@ func addIDOnlyPackagesToImports(depLabels []string, pkg *packages.Package) error
 	for _, label := range depLabels {
 		pkg.Imports[label] = &packages.Package{ID: label}
 	}
+	log.Println("FIXME aspectResponseAddIDOnlyPackagesToImports 100", pkg.GoFiles, pkg.Imports)
 	return nil
 }
 
@@ -712,14 +720,17 @@ func findStdlibBazelLabelsInFile(fp string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var imps []string
+	var labels []string
+	log.Println("FIXME findStdlibBazelLabelsInFile 1", fp, ", Imports:", f.Imports)
 	for _, impSpec := range f.Imports {
-		imp := impSpec.Path.Value
-		if _, found := stdlibmaps.StdlibImportPathToBazelLabel[imp]; found {
-			imps = append(imps, imp)
+		imp := strings.Trim(impSpec.Path.Value, `"`)
+		log.Println("FIXME findStdlibBazelLabelsInFile 20", imp)
+		if label, found := stdlibmaps.StdlibImportPathToBazelLabel[imp]; found {
+			labels = append(labels, label)
 		}
 	}
-	return imps, nil
+	log.Println("FIXME findStdlibBazelLabelsInFile 100", labels)
+	return labels, nil
 }
 
 func stdlibBazelLabel(importPath string) string {

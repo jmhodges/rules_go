@@ -12,6 +12,7 @@ package main
 import (
 	"bytes"
 	"flag"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -29,21 +30,20 @@ func main() {
 	if envBin := os.Getenv("BAZEL_BIN_DIR"); envBin != "" {
 		bazelBinDir = envBin
 	}
-	environ := os.Environ()
-	f, err := os.OpenFile("/Users/jeffhodges/Desktop/wut.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0664)
+
+	f, err := os.OpenFile("/Users/jeffhodges/Desktop/wut.txt", os.O_APPEND|os.O_RDWR|os.O_CREATE, 0664)
 	if err != nil {
-		log.Fatalf("unable to open wut.txt: %s", err)
+		log.Fatalf("FIXME unable to open wut.txt: %s", err)
 	}
 	log.SetOutput(f)
-	dropBazelTestEnv := os.Getenv("BAZEL_DROP_TEST_ENV") == "1"
-	log.Println("FIXME BAZEL_DROP_TEST_ENV:", dropBazelTestEnv)
 
-	for _, e := range environ {
+	dropBazelTestEnv := os.Getenv("BAZEL_DROP_TEST_ENV") == "1"
+
+	var environ []string
+	for _, e := range os.Environ() {
 		if dropBazelTestEnv && (strings.HasPrefix(e, "TEST_") || strings.HasPrefix(e, "RUNFILES_")) {
-			log.Println("FIXME Skipping env var:", e)
 			continue
 		}
-		log.Println("FIXME Allowing env var:", e)
 		environ = append(environ, e)
 	}
 
@@ -76,14 +76,16 @@ func main() {
 	}
 
 	// Set up BAZEL_EXEC_ROOT for querytool.sh which is using go_env_cmd to maintain
-	// a consistent go envrionment. See the docs on go_env_cmd for why we set up
+	// a consistent go environment. See the docs on go_env_cmd for why we set up
 	// BAZEL_EXEC_ROOT
 	execRoot, err := bazelInfoExecRoot(environ)
 	if err != nil {
 		log.Fatalf("gopackagesdriver: unable to query bazel for the execution root path we need to find the Go files of your bazel packages: %s", err)
 	}
-	log.Println("FIXME BAZEL_EXEC_ROOT:", execRoot)
 
+	// FIXME i think this doesn't work, and we have to do the env var filtering
+	// stuff only. I believe we can delete all the appearances of
+	// BAZEL_EXEC_ROOT.
 	environ = append(environ, "BAZEL_EXEC_ROOT="+execRoot)
 	// We have to do this seperate command instead of just calling it with
 	// `bazel run` because that will change the PWD to inside the bazel output
@@ -97,7 +99,8 @@ func main() {
 
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	// FIXME make this not MultiWriter
+	cmd.Stderr = io.MultiWriter(os.Stderr, f)
 	cmd.Env = environ
 	if err := cmd.Run(); err != nil {
 		log.Fatalf("gopackagesdriver: error running gopackagesdriver bazel tooling: %v", err)

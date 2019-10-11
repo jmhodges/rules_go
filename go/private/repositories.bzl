@@ -78,9 +78,9 @@ def go_rules_dependencies():
     _maybe(
         git_repository,
         name = "org_golang_x_tools",
-        remote = "https://go.googlesource.com/tools",
+        remote = "file:///Users/jeffhodges/src/golang.org/x/tools", # FIXME
         # master (latest) as of 2019-10-05
-        commit = "c9f9432ec4b21a28c4d47f172513698febb68e9c",
+        commit = "a40a895f63ffa6eced2cfebd3ea8229162797a28",
         patches = [
             "@io_bazel_rules_go//third_party:org_golang_x_tools-deletegopls.patch",
             "@io_bazel_rules_go//third_party:org_golang_x_tools-gazelle.patch",

@@ -109,6 +109,7 @@ func K() string {
 
 // FIXME rename file to gopackagesdriver_test.go
 func TestSinglePkgPattern(t *testing.T) {
+
 	// check we can actually build :hello
 	if err := bazel_testing.RunBazel("build", "//:hello"); err != nil {
 		t.Fatalf("unable to build //:hello normally: %s", err)
@@ -118,6 +119,13 @@ func TestSinglePkgPattern(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.Setenv("GOPACKAGESDRIVER", driverPath) // FIXME Use Env and os.Environ
+
+	fmtPkg := &packages.Package{
+		ID:      "@go_sdk//stdlibstub:fmt",
+		Name:    "fmt",
+		PkgPath: "fmt",
+	}
+
 	testcases := []struct {
 		inputPatterns string
 		mode          packages.LoadMode
@@ -133,6 +141,19 @@ func TestSinglePkgPattern(t *testing.T) {
 				GoFiles: []string{abs("hello.go")},
 			},
 		},
+		{
+			"//:hello",
+			packages.NeedName | packages.NeedImports,
+			&packages.Package{
+				ID:      "//:hello",
+				Name:    "hello",
+				PkgPath: "fakeimportpath/hello",
+				GoFiles: []string{abs("hello.go")},
+				Imports: map[string]*packages.Package{
+					fmtPkg.ID: fmtPkg,
+				},
+			},
+		},
 	}
 
 	for tcInd, tc := range testcases {
@@ -141,7 +162,7 @@ func TestSinglePkgPattern(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 				defer cancel()
 				cfg := &packages.Config{
-					Mode:    packages.NeedName | packages.NeedFiles,
+					Mode:    tc.mode,
 					Context: ctx,
 				}
 				pkgs, err := packages.Load(cfg, "//:hello")
