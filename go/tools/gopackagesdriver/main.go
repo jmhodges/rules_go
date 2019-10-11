@@ -12,7 +12,6 @@ package main
 import (
 	"bytes"
 	"flag"
-	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -99,8 +98,7 @@ func main() {
 
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
-	// FIXME make this not MultiWriter
-	cmd.Stderr = io.MultiWriter(os.Stderr, f)
+	cmd.Stderr = os.Stderr
 	cmd.Env = environ
 	if err := cmd.Run(); err != nil {
 		log.Fatalf("gopackagesdriver: error running gopackagesdriver bazel tooling: %v", err)
