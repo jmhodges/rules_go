@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -112,7 +111,7 @@ func TestMain(m *testing.M, args Args) {
 
 	flag.Parse()
 
-	workspaceDir, cleanup, err := setupWorkspace(args)
+	workspaceDir, cleanup, err := setupWorkspace(args, files)
 	defer func() {
 		if err := cleanup(); err != nil {
 			fmt.Fprintf(os.Stderr, "cleanup error: %v\n", err)
@@ -208,7 +207,7 @@ func (e *StderrExitError) Error() string {
 	return sb.String()
 }
 
-func setupWorkspace(args Args) (dir string, cleanup func() error, err error) {
+func setupWorkspace(args Args, files []string) (dir string, cleanup func() error, err error) {
 	var cleanups []func() error
 	cleanup = func() error {
 		var firstErr error
@@ -279,7 +278,7 @@ func setupWorkspace(args Args) (dir string, cleanup func() error, err error) {
 		runfileMap[runfileKey{rf.Workspace, rf.ShortPath}] = rf.Path
 	}
 	workspaceNames := make(map[string]bool)
-	for _, argPath := range flag.Args() {
+	for _, argPath := range files {
 		shortPath := path.Clean(argPath)
 		if !strings.HasPrefix(shortPath, "external/") {
 			return "", cleanup, fmt.Errorf("unexpected file (missing 'external/' prefix): %s", argPath)
@@ -303,8 +302,6 @@ func setupWorkspace(args Args) (dir string, cleanup func() error, err error) {
 			return "", cleanup, err
 		}
 	}
-
-	log.Println("FIXME outBaseDir:", outBaseDir, "; mainDir:", mainDir)
 
 	// If there's no WORKSPACE file, create one.
 	workspacePath := filepath.Join(mainDir, "WORKSPACE")
