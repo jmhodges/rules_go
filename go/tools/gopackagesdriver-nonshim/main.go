@@ -334,8 +334,8 @@ func packagesFromPatterns(req *driverRequest, targets []string) (*driverResponse
 	// code to move around, so I'm skipping it since it's just a warning from
 	// bazel.
 	log.Println("FIXME packagesFromPatterns 010 bazelTargets:", bazelTargets, "stdlibPatterns:", stdlibPatterns)
-	pkgs := make(map[pkgID]*packages.Package)
-	roots := make(map[pkgID]bool)
+	pkgs := make(map[packageID]*packages.Package)
+	roots := make(map[packageID]bool)
 
 	if len(bazelTargets) != 0 {
 		err := packagesFromBazelTargets(req, bazelTargets, pkgs, roots)
@@ -357,9 +357,9 @@ func packagesFromPatterns(req *driverRequest, targets []string) (*driverResponse
 	log.Println("FIXME packagesFromPatterns 020", pkgs)
 	log.Println("FIXME packagesFromPatterns 021", roots)
 	sortedPkgs := make([]*packages.Package, 0, len(pkgs))
-	allPkgs := make(map[pkgID]bool)
+	allPkgs := make(map[packageID]bool)
 	for _, pkg := range pkgs {
-		id := pkgID(pkg.ID)
+		id := packageID(pkg.ID)
 		if !allPkgs[id] {
 			sortedPkgs = append(sortedPkgs, pkg)
 			allPkgs[id] = true
@@ -374,7 +374,7 @@ func packagesFromPatterns(req *driverRequest, targets []string) (*driverResponse
 
 	for _, pkg := range pkgs {
 		for _, ipkg := range pkg.Imports {
-			id := pkgID(ipkg.ID)
+			id := packageID(ipkg.ID)
 			if !allPkgs[id] {
 				sortedPkgs = append(sortedPkgs, ipkg)
 				allPkgs[id] = true
@@ -402,9 +402,11 @@ func packagesFromPatterns(req *driverRequest, targets []string) (*driverResponse
 	}, nil
 }
 
-type pkgID string
+// packageID is used to distinguish Package.ID from Package.PkgPath here. It's a
+// bazel label and maybe we should call it "packageLabel", instead?
+type packageID string
 
-func packagesFromBazelTargets(req *driverRequest, bazelTargets []string, pkgs map[pkgID]*packages.Package, roots map[pkgID]bool) error {
+func packagesFromBazelTargets(req *driverRequest, bazelTargets []string, pkgs map[packageID]*packages.Package, roots map[packageID]bool) error {
 	// Build package data files using bazel. We use one of several aspects
 	// (depending on what mode we're in). The aspect produces .json and source
 	// files in an output group. Each .json file contains a serialized
@@ -540,7 +542,7 @@ func packagesFromBazelTargets(req *driverRequest, bazelTargets []string, pkgs ma
 		if err != nil {
 			return fmt.Errorf("unable to parse JSON response in file %#v from aspect %#v: %s", fp, aspect, err)
 		}
-		_, found := pkgs[pkgID(resp.ID)]
+		_, found := pkgs[packageID(resp.ID)]
 		if found {
 			continue
 		}
@@ -562,15 +564,15 @@ func packagesFromBazelTargets(req *driverRequest, bazelTargets []string, pkgs ma
 				return err
 			}
 		}
-		pkgs[pkgID(pkg.ID)] = pkg
-		roots[pkgID(pkg.ID)] = true
+		pkgs[packageID(pkg.ID)] = pkg
+		roots[packageID(pkg.ID)] = true
 	}
 	return nil
 }
 
-func packagesFromStdlibPatterns(req *driverRequest, stdlibPatterns []string, pkgs map[pkgID]*packages.Package, roots map[pkgID]bool) error {
+func packagesFromStdlibPatterns(req *driverRequest, stdlibPatterns []string, pkgs map[packageID]*packages.Package, roots map[packageID]bool) error {
 	for _, patt := range stdlibPatterns {
-		_, found := pkgs[pkgID(stdlibmaps.StdlibImportPathToBazelLabel[patt])]
+		_, found := pkgs[packageID(stdlibmaps.StdlibImportPathToBazelLabel[patt])]
 		if found {
 			continue
 		}
@@ -594,8 +596,8 @@ func packagesFromStdlibPatterns(req *driverRequest, stdlibPatterns []string, pkg
 			}
 		}
 
-		pkgs[pkgID(spkg.ID)] = spkg
-		roots[pkgID(spkg.ID)] = true
+		pkgs[packageID(spkg.ID)] = spkg
+		roots[packageID(spkg.ID)] = true
 	}
 	return nil
 }
