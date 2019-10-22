@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -105,7 +104,6 @@ func TestMain(m *testing.M, args Args) {
 		fmt.Fprintf(os.Stderr, "error: -begin_files, -end_files not set together or in order\n")
 		return
 	}
-	log.Println("FIXME os.Args:", os.Args)
 	if beginFiles >= 0 {
 		files = os.Args[beginFiles+1 : endFiles-1]
 		os.Args = append(os.Args[:beginFiles:beginFiles], os.Args[endFiles+1:]...)
