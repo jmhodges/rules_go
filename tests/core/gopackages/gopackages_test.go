@@ -24,9 +24,15 @@ import (
 // encompassing rules_go's bazel-bin. See the gopackages_test target in
 // BUILD.bazel.
 var goPkgDriverPath = flag.String("goPkgDriverPath", "", "path to the gopackagesdriver binary")
+var pwd string
 
 // FIXME should this test directory be somewhere else?
 func TestMain(m *testing.M) {
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("unable to Getwd: %s", err)
+	}
+	pwd = wd
 	bazel_testing.TestMain(m, bazel_testing.Args{
 		Nogo: "@//:gopackagesdriver_nogo",
 		Main: `
@@ -122,8 +128,7 @@ func TestSinglePkgPattern(t *testing.T) {
 
 	fmtPkg := &packages.Package{
 		ID:      "@go_sdk//stdlibstub:fmt",
-		Name:    "fmt",
-		PkgPath: "fmt",
+		Imports: make(map[string]*packages.Package),
 	}
 
 	testcases := []struct {
@@ -138,9 +143,19 @@ func TestSinglePkgPattern(t *testing.T) {
 				ID:      "//:hello",
 				Name:    "hello",
 				PkgPath: "fakeimportpath/hello",
+			},
+		},
+		{
+			"//:hello",
+			packages.NeedName | packages.NeedFiles,
+			&packages.Package{
+				ID:      "//:hello",
+				Name:    "hello",
+				PkgPath: "fakeimportpath/hello",
 				GoFiles: []string{abs("hello.go")},
 			},
 		},
+
 		{
 			"//:hello",
 			packages.NeedName | packages.NeedImports,
@@ -148,9 +163,8 @@ func TestSinglePkgPattern(t *testing.T) {
 				ID:      "//:hello",
 				Name:    "hello",
 				PkgPath: "fakeimportpath/hello",
-				GoFiles: []string{abs("hello.go")},
 				Imports: map[string]*packages.Package{
-					fmtPkg.ID: fmtPkg,
+					"fmt": fmtPkg,
 				},
 			},
 		},
@@ -245,30 +259,32 @@ func TestSingleFilePattern(t *testing.T) {
 	// FIXME Testing for absolute files doesn't seem to work because we can't do
 	// the environ work done in BazelCmd in the bazel commands inside
 	// gopackagesdriver. Will need to talk to jayconrod et. al. about this.
-
-	absPath, err := filepath.Abs("./goodbye_other.go")
-	if err != nil {
-		t.Fatalf("unable to get goodbye_other.go's absolute file path")
-	}
-	pkgs, err = packages.Load(cfg, fmt.Sprintf("file=%s", absPath))
-	if err != nil {
-		t.Fatalf("unable to packages.Load: %s", err)
-	}
-	if len(pkgs) < 1 {
-		t.Fatalf("no packages returned")
-	}
-	if len(pkgs) != 1 {
-		t.Errorf("too many packages returned: want 1, got %d", len(pkgs))
-	}
-	if pkg.ID != expectedID {
-		t.Errorf("absolute path, ID: want %#v, got %#v", expectedID, pkg.ID)
-	}
-	if expectedImportPath != pkg.PkgPath {
-		t.Errorf("abolute path, PkgPath: want %#v, got %#v", expectedImportPath, pkg.PkgPath)
-	}
-	if !compareFiles(expectedGoFiles, pkg.GoFiles) {
-		t.Errorf("absolute path, GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
-	}
+	// filepath.Abs didn't work, nor does getwd before cd
+	/*
+		absPath := filepath.Join(pwd, "./goodbye_other.go")
+		if err != nil {
+			t.Fatalf("unable to get goodbye_other.go's absolute file path")
+		}
+		pkgs, err = packages.Load(cfg, fmt.Sprintf("file=%s", absPath))
+		if err != nil {
+			t.Fatalf("unable to packages.Load: %s", err)
+		}
+		if len(pkgs) < 1 {
+			t.Fatalf("no packages returned")
+		}
+		if len(pkgs) != 1 {
+			t.Errorf("too many packages returned: want 1, got %d", len(pkgs))
+		}
+		if pkg.ID != expectedID {
+			t.Errorf("absolute path, ID: want %#v, got %#v", expectedID, pkg.ID)
+		}
+		if expectedImportPath != pkg.PkgPath {
+			t.Errorf("abolute path, PkgPath: want %#v, got %#v", expectedImportPath, pkg.PkgPath)
+		}
+		if !compareFiles(expectedGoFiles, pkg.GoFiles) {
+			t.Errorf("absolute path, GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
+		}
+	*/
 }
 
 func TestCompiledGoFilesIncludesCgo(t *testing.T) {
@@ -368,11 +384,6 @@ func TestStdlib(t *testing.T) {
 	t.Logf("FIXME execution_root is %#v", string(root))
 
 	os.Setenv("BAZEL_DROP_TEST_ENV", "1")
-	fmtPkg := &packages.Package{
-		ID:      "@go_sdk//stdlibstub:fmt",
-		Name:    "fmt",
-		PkgPath: "fmt",
-	}
 
 	testcases := []struct {
 		inputPatterns []string
@@ -400,21 +411,6 @@ func TestStdlib(t *testing.T) {
 					Name:    "builtin",
 					PkgPath: "builtin",
 					GoFiles: []string{abs("external/go_sdk/src/builtin/builtin.go")},
-				},
-			},
-		},
-		{
-			[]string{"builtin"},
-			packages.NeedName | packages.NeedFiles | packages.NeedImports,
-			[]*packages.Package{
-				&packages.Package{
-					ID:      "@go_sdk//stdlibstub:builtin",
-					Name:    "builtin",
-					PkgPath: "builtin",
-					GoFiles: []string{abs("external/go_sdk/src/builtin/builtin.go")},
-					Imports: map[string]*packages.Package{
-						"fmt": fmtPkg,
-					},
 				},
 			},
 		},

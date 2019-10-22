@@ -159,9 +159,9 @@ def _basic_driver_response(ctx, target, source, library):
             nongo_srcs.append(src.path)
 
     label_string = _label_to_string(target.label)
-    deps_labels = []
+    deps = {}
     for deptarg in ctx.rule.attr.deps:
-        deps_labels.append(_label_to_string(deptarg.label))
+        deps[deptarg[GoLibrary].importpath] = _label_to_string(deptarg.label)
         
     return {
         "id": label_string,
@@ -170,7 +170,7 @@ def _basic_driver_response(ctx, target, source, library):
                                        # the other _export aspect?
         "go_files": go_srcs,
         "other_files": nongo_srcs,
-        "deps": deps_labels,
+        "dep_importpaths_to_labels": deps,
     }
 
 def _export_driver_response(go, target_label, archive):
