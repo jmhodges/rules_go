@@ -126,7 +126,7 @@ func TestSinglePkgPattern(t *testing.T) {
 	os.Setenv("GOPACKAGESDRIVER", driverPath) // FIXME Use Env and os.Environ
 
 	fmtPkg := &packages.Package{
-		ID:      "@go_sdk//stdlibstub:fmt",
+		ID:      "@go_sdk//stdlibstub/fmt",
 		Imports: make(map[string]*packages.Package),
 	}
 
