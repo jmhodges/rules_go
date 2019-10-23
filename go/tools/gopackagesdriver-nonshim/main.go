@@ -169,6 +169,10 @@ func run(args []string) error {
 			targets = append(targets, patt)
 		}
 	}
+	goarch := strings.TrimSpace(os.Getenv("GOARCH"))
+	if goarch == "" {
+		return fmt.Errorf("GOARCH env var not set but needed to gather size info")
+	}
 
 	reqData, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
@@ -199,6 +203,8 @@ func run(args []string) error {
 			return err
 		}
 	}
+	// SizesFor always return StdSizesm,
+	resp.Sizes = types.SizesFor("gc", goarch).(*types.StdSizes)
 	respData, err := json.Marshal(resp)
 	if err != nil {
 		return fmt.Errorf("could not marshal driver response: %v", err)
