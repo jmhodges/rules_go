@@ -2,7 +2,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_binary")
 
 go_binary(
     name = "gopackagesdriver-nonshim",
-    srcs = ["main.go"],
+    srcs = [
+        "bazel.go",
+        "main.go"
+    ],
     visibility = ["//visibility:public"],
     deps = [
         "//go/tools/gopackagesdriver-nonshim/stdlibmaps:go_default_library",

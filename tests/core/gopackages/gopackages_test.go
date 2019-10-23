@@ -115,7 +115,6 @@ func K() string {
 
 // FIXME rename file to gopackagesdriver_test.go
 func TestSinglePkgPattern(t *testing.T) {
-
 	// check we can actually build :hello
 	if err := bazel_testing.RunBazel("build", "//:hello"); err != nil {
 		t.Fatalf("unable to build //:hello normally: %s", err)
