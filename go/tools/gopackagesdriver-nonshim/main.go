@@ -84,12 +84,12 @@ var modes = []modeInfo{
 }
 
 func main() {
-	// f, err := os.OpenFile("/Users/jmhodges/Desktop/wut.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	// if err != nil {
-	// 	log.Fatalf("couldn't open log file: %s", err)
-	// }
-	// defer f.Close()
-	// log.SetOutput(f)
+	f, err := os.OpenFile("/Users/jmhodges/Desktop/wut.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("couldn't open log file: %s", err)
+	}
+	defer f.Close()
+	log.SetOutput(f)
 	// log.Println("FIXME main 001: targets", os.Args)
 	// log.SetPrefix("gopackagesdriver: ")
 	// log.SetFlags(0)
@@ -667,6 +667,9 @@ func aspectResponseAddIDOnlyPackagesToImports(resp *aspectResponse, pkg *package
 
 func addIDOnlyPackagesToImports(depImpToLabels map[string]string, pkg *packages.Package) error {
 	log.Println("FIXME aspectResponseAddIDOnlyPackagesToImports 1", pkg.GoFiles)
+	if pkg.Imports == nil {
+		pkg.Imports = make(map[string]*packages.Package)
+	}
 	for _, fp := range pkg.GoFiles {
 		// FIXME all errors in here should probably be Errors field entries?
 		labels, err := findStdlibImportPathsToBazelLabelsInFile(fp)
@@ -717,32 +720,42 @@ func absolutizeFilePaths(pwd string, fps []string) []string {
 
 // FIXME not actually working. this is for gopls.
 func buildStdlibPackageFromImportPath(imp string) (*packages.Package, error) {
-	if imp == "builtin" {
-		id := stdlibBazelLabel("builtin")
-		return &packages.Package{
-			ID:      id,
-			Name:    "builtin",
-			PkgPath: "builtin",
-			GoFiles: absolutizeFilePaths(execRoot, []string{"external/go_sdk/src/builtin/builtin.go"}),
-			// pkg builtin never has an export file.
-			ExportFile: "",
-			// pkg builtin never has compiled Go files.
-			CompiledGoFiles: nil,
-		}, nil
+	// FIXME do this out for real (with the go list driver?)
+	ind := strings.LastIndex(imp, "/")
+	if ind == -1 {
+		ind = 0
 	} else {
-		// FIXME do this out for real (with the go list driver?)
-		ind := strings.LastIndex(imp, "/")
-		if ind == -1 {
-			ind = 0
-		}
-		name := imp[ind:]
-		label := stdlibBazelLabel(imp)
-		return &packages.Package{
-			ID:      label,
-			Name:    name,
-			PkgPath: imp,
-		}, nil
+		ind++
 	}
+	name := imp[ind:]
+	dir := filepath.Join(os.Getenv("GOROOT"), "src", imp)
+	fis, err := ioutil.ReadDir(dir)
+	// FIXME tag on to Errors, instead
+	if err != nil {
+		return nil, err
+	}
+
+	var goFiles []string
+	var compiledGoFiles []string
+	for _, fi := range fis {
+		full := filepath.Join(dir, fi.Name())
+		if strings.HasSuffix(fi.Name(), "_test.go") {
+			// do nothing
+		} else if strings.HasSuffix(fi.Name(), ".go") {
+			goFiles = append(goFiles, full)
+			// FIXME this is probably wrong
+			compiledGoFiles = append(compiledGoFiles, full)
+		}
+	}
+
+	label := stdlibBazelLabel(imp)
+	return &packages.Package{
+		ID:              label,
+		Name:            name,
+		PkgPath:         imp,
+		GoFiles:         goFiles,
+		CompiledGoFiles: compiledGoFiles,
+	}, nil
 }
 
 func findStdlibImportPathsToBazelLabelsInFile(fp string) (map[string]string, error) {

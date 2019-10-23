@@ -30,7 +30,7 @@ type pkg struct {
 	StdPkgBazelLabel string
 }
 
-const stdlibLabelFmt = "@go_sdk//stdlibstub:%s"
+const stdlibLabelFmt = "@go_sdk//stdlibstub/%s"
 
 func main() {
 	// FIXME using this style means we either have to check the out of this in
@@ -58,7 +58,7 @@ func main() {
 	var vendorPkgs []pkg
 	for _, line := range lines {
 		line = bytes.TrimSpace(line)
-		if len(line) == 0 {
+		if len(line) == 0 || bytes.Index(line, []byte("/testdata/")) != -1 {
 			continue
 		}
 		p := pkg{

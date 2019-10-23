@@ -287,6 +287,10 @@ func TestSingleFilePattern(t *testing.T) {
 	*/
 }
 
+func TestSizes(t *testing.T) {
+
+}
+
 func TestCompiledGoFilesIncludesCgo(t *testing.T) {
 	// FIXME get those cgo intermediate files from somewhere
 	t.Skipf("ask about where to find to find or how to cgo generated intermediate files")
@@ -395,7 +399,7 @@ func TestStdlib(t *testing.T) {
 			packages.NeedName | packages.NeedFiles,
 			[]*packages.Package{
 				&packages.Package{
-					ID:      "@go_sdk//stdlibstub:builtin",
+					ID:      "@go_sdk//stdlibstub/builtin",
 					Name:    "builtin",
 					PkgPath: "builtin",
 					GoFiles: []string{abs("external/go_sdk/src/builtin/builtin.go")},
@@ -403,14 +407,78 @@ func TestStdlib(t *testing.T) {
 			},
 		},
 		{
-			[]string{"@go_sdk//stdlibstub:builtin"},
+			[]string{"@go_sdk//stdlibstub/builtin"},
 			packages.NeedName | packages.NeedFiles,
 			[]*packages.Package{
 				&packages.Package{
-					ID:      "@go_sdk//stdlibstub:builtin",
+					ID:      "@go_sdk//stdlibstub/builtin",
 					Name:    "builtin",
 					PkgPath: "builtin",
 					GoFiles: []string{abs("external/go_sdk/src/builtin/builtin.go")},
+				},
+			},
+		},
+		{
+			[]string{"@go_sdk//stdlibstub/io/ioutil"},
+			packages.NeedName | packages.NeedFiles,
+			[]*packages.Package{
+				&packages.Package{
+					ID:      "@go_sdk//stdlibstub/io/ioutil",
+					Name:    "ioutil",
+					PkgPath: "io/ioutil",
+					GoFiles: []string{
+						abs("external/go_sdk/src/io/ioutil/ioutil.go"),
+						abs("external/go_sdk/src/io/ioutil/tempfile.go"),
+					},
+				},
+			},
+		},
+		{
+			[]string{"@go_sdk//stdlibstub/io/ioutil"},
+			packages.NeedName | packages.NeedImports,
+			[]*packages.Package{
+				&packages.Package{
+					ID:      "@go_sdk//stdlibstub/io/ioutil",
+					Name:    "ioutil",
+					PkgPath: "io/ioutil",
+					Imports: map[string]*packages.Package{
+						"bytes": &packages.Package{
+							ID:      "@go_sdk//stdlibstub/bytes",
+							Imports: make(map[string]*packages.Package),
+						},
+						"io": &packages.Package{
+							ID:      "@go_sdk//stdlibstub/io",
+							Imports: make(map[string]*packages.Package),
+						},
+						"os": &packages.Package{
+							ID:      "@go_sdk//stdlibstub/os",
+							Imports: make(map[string]*packages.Package),
+						},
+						"path/filepath": &packages.Package{
+							ID:      "@go_sdk//stdlibstub/path/filepath",
+							Imports: make(map[string]*packages.Package),
+						},
+						"sort": &packages.Package{
+							ID:      "@go_sdk//stdlibstub/sort",
+							Imports: make(map[string]*packages.Package),
+						},
+						"strconv": &packages.Package{
+							ID:      "@go_sdk//stdlibstub/strconv",
+							Imports: make(map[string]*packages.Package),
+						},
+						"strings": &packages.Package{
+							ID:      "@go_sdk//stdlibstub/strings",
+							Imports: make(map[string]*packages.Package),
+						},
+						"sync": &packages.Package{
+							ID:      "@go_sdk//stdlibstub/sync",
+							Imports: make(map[string]*packages.Package),
+						},
+						"time": &packages.Package{
+							ID:      "@go_sdk//stdlibstub/time",
+							Imports: make(map[string]*packages.Package),
+						},
+					},
 				},
 			},
 		},
