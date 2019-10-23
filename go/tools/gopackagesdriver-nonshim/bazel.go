@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"os/exec"
 
+	bespb "github.com/bazelbuild/rules_go/go/tools/gopackagesdriver-nonshim/proto/build_event_stream"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/tools/go/packages"
 )
@@ -67,4 +69,79 @@ func bazelBuildAspects(req *driverRequest, bazelTargets []string) (*proto.Buffer
 	}
 	eventFile.Close()
 	return proto.NewBuffer(eventData), nil
+}
+
+func extractBazelAspectOutputFilePaths(pbuf *proto.Buffer) (map[string]bool, error) {
+	// FIXME I'm not sure what the goal of this variable and visit was for, but
+	// I'm sure I'll find out soon.
+	var rootSets []string
+	setToFiles := make(map[string][]string)
+	setToSets := make(map[string][]string)
+
+	var event bespb.BuildEvent
+	for !event.GetLastMessage() {
+		if err := pbuf.DecodeMessage(&event); err != nil {
+			return nil, fmt.Errorf("unable to parse bazel event message: %w", err)
+		}
+
+		if id := event.GetId().GetTargetCompleted(); id != nil {
+			completed := event.GetCompleted()
+			if !completed.GetSuccess() {
+				return nil, fmt.Errorf("%s: target did not build successfully", id.GetLabel())
+			}
+			for _, g := range completed.GetOutputGroup() {
+				if g.GetName() != goPkgsDriverOutputGroup {
+					continue
+				}
+				for _, s := range g.GetFileSets() {
+					if setId := s.GetId(); setId != "" {
+						rootSets = append(rootSets, setId)
+					}
+				}
+			}
+		}
+
+		if id := event.GetId().GetNamedSet(); id != nil {
+			files := event.GetNamedSetOfFiles().GetFiles()
+			fileNames := make([]string, len(files))
+			for i, f := range files {
+				u, err := url.Parse(f.GetUri())
+				if err != nil {
+					return nil, fmt.Errorf("unable to parse file URI %#v: %w", f.GetUri(), err)
+				}
+				if u.Scheme == "file" {
+					fileNames[i] = u.Path
+				} else {
+					return nil, fmt.Errorf("scheme in bazel output files must be \"file\", but got %#v in URI %#v", u.Scheme, f.GetUri())
+				}
+			}
+			setToFiles[id.GetId()] = fileNames
+			sets := event.GetNamedSetOfFiles().GetFileSets()
+			setIds := make([]string, len(sets))
+			for i, s := range sets {
+				setIds[i] = s.GetId()
+			}
+			setToSets[id.GetId()] = setIds
+			continue
+		}
+	}
+	var visit func(string, map[string]bool, map[string]bool)
+	visit = func(setId string, files map[string]bool, visited map[string]bool) {
+		if visited[setId] {
+			return
+		}
+		visited[setId] = true
+		for _, f := range setToFiles[setId] {
+			files[f] = true
+		}
+		for _, s := range setToSets[setId] {
+			visit(s, files, visited)
+		}
+	}
+
+	files := make(map[string]bool)
+	for _, s := range rootSets {
+		visit(s, files, map[string]bool{})
+	}
+	return files, nil
 }
