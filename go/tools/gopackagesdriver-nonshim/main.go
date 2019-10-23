@@ -84,7 +84,7 @@ var modes = []modeInfo{
 }
 
 func main() {
-	// f, err := os.OpenFile("/Users/jeffhodges/Desktop/wut.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	// f, err := os.OpenFile("/Users/jmhodges/Desktop/wut.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	// if err != nil {
 	// 	log.Fatalf("couldn't open log file: %s", err)
 	// }

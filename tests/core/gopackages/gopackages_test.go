@@ -454,7 +454,6 @@ func TestStdlib(t *testing.T) {
 				}
 			})
 	}
-
 }
 
 // FIXME add to init or something

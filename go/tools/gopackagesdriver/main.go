@@ -30,12 +30,6 @@ func main() {
 		bazelBinDir = envBin
 	}
 
-	f, err := os.OpenFile("/Users/jeffhodges/Desktop/wut.txt", os.O_APPEND|os.O_RDWR|os.O_CREATE, 0664)
-	if err != nil {
-		log.Fatalf("FIXME unable to open wut.txt: %s", err)
-	}
-	log.SetOutput(f)
-
 	dropBazelTestEnv := os.Getenv("BAZEL_DROP_TEST_ENV") == "1"
 
 	var environ []string
