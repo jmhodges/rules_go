@@ -30,14 +30,12 @@ import (
 	"go/types"
 	"io/ioutil"
 	"log"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 
-	bespb "github.com/bazelbuild/rules_go/go/tools/gopackagesdriver-nonshim/proto/build_event_stream"
 	"github.com/bazelbuild/rules_go/go/tools/gopackagesdriver-nonshim/stdlibmaps"
 	"golang.org/x/tools/go/packages"
 )
@@ -323,7 +321,7 @@ const goPkgsDriverOutputGroup = "gopackagesdriver_data"
 // FIXME only really supports one target
 func packagesFromPatterns(req *driverRequest, targets []string) (*driverResponse, error) {
 	log.Println("FIXME packagesFromPatterns 001: targets", targets)
-	bazelTargets := make([]string, 0, len(targets))
+	bazelTargets := make([]packageID, 0, len(targets))
 	var stdlibPatterns []string
 	for _, targ := range targets {
 		if imp, ok := stdlibmaps.StdlibBazelLabelToImportPath[targ]; ok {
@@ -331,7 +329,7 @@ func packagesFromPatterns(req *driverRequest, targets []string) (*driverResponse
 		} else if _, ok := stdlibmaps.StdlibImportPathToBazelLabel[targ]; ok {
 			stdlibPatterns = append(stdlibPatterns, targ)
 		} else {
-			bazelTargets = append(bazelTargets, targ)
+			bazelTargets = append(bazelTargets, packageID(targ))
 		}
 	}
 
@@ -343,7 +341,7 @@ func packagesFromPatterns(req *driverRequest, targets []string) (*driverResponse
 	roots := make(map[packageID]bool)
 
 	if len(bazelTargets) != 0 {
-		err := packagesFromBazelTargets(req, bazelTargets, pkgs, roots)
+		err := packagesFromBazelTargets(req.Mode, req.BuildFlags, bazelTargets, pkgs, roots)
 		if err != nil {
 			// FIXME If we do the Errors field work, this might need more
 			// context because it'll only happen in rare, serious cases.
@@ -411,85 +409,18 @@ func packagesFromPatterns(req *driverRequest, targets []string) (*driverResponse
 // bazel label and maybe we should call it "packageLabel", instead?
 type packageID string
 
-func packagesFromBazelTargets(req *driverRequest, bazelTargets []string, pkgs map[packageID]*packages.Package, roots map[packageID]bool) error {
-	pbuf, err := bazelBuildAspects(req, bazelTargets)
+func packagesFromBazelTargets(mode packages.LoadMode, buildFlags []string, bazelTargets []packageID, pkgs map[packageID]*packages.Package, roots map[packageID]bool) error {
+	pbuf, err := bazelBuildAspects(mode, buildFlags, bazelTargets)
 	if err != nil {
 		return err
 	}
-	// FIXME I'm not sure what the goal of this variable and visit was for, but
-	// I'm sure I'll find out soon.
-	var rootSets []string
-	setToFiles := make(map[string][]string)
-	setToSets := make(map[string][]string)
 
-	var event bespb.BuildEvent
-	for !event.GetLastMessage() {
-		if err := pbuf.DecodeMessage(&event); err != nil {
-			return err
-		}
-
-		if id := event.GetId().GetTargetCompleted(); id != nil {
-			completed := event.GetCompleted()
-			if !completed.GetSuccess() {
-				return fmt.Errorf("%s: target did not build successfully", id.GetLabel())
-			}
-			for _, g := range completed.GetOutputGroup() {
-				if g.GetName() != goPkgsDriverOutputGroup {
-					continue
-				}
-				for _, s := range g.GetFileSets() {
-					if setId := s.GetId(); setId != "" {
-						rootSets = append(rootSets, setId)
-					}
-				}
-			}
-		}
-
-		if id := event.GetId().GetNamedSet(); id != nil {
-			files := event.GetNamedSetOfFiles().GetFiles()
-			fileNames := make([]string, len(files))
-			for i, f := range files {
-				u, err := url.Parse(f.GetUri())
-				if err != nil {
-					return fmt.Errorf("unable to parse file URI %#v: %s", f.GetUri(), err)
-				}
-				if u.Scheme == "file" {
-					fileNames[i] = u.Path
-				} else {
-					return fmt.Errorf("scheme in bazel output files must be \"file\", but got %#v in URI %#v", u.Scheme, f.GetUri())
-				}
-			}
-			setToFiles[id.GetId()] = fileNames
-			sets := event.GetNamedSetOfFiles().GetFileSets()
-			setIds := make([]string, len(sets))
-			for i, s := range sets {
-				setIds[i] = s.GetId()
-			}
-			setToSets[id.GetId()] = setIds
-			continue
-		}
+	files, err := extractBazelAspectOutputFilePaths(pbuf)
+	if err != nil {
+		return err
 	}
 
-	var visit func(string, map[string]bool, map[string]bool)
-	visit = func(setId string, files map[string]bool, visited map[string]bool) {
-		if visited[setId] {
-			return
-		}
-		visited[setId] = true
-		for _, f := range setToFiles[setId] {
-			files[f] = true
-		}
-		for _, s := range setToSets[setId] {
-			visit(s, files, visited)
-		}
-	}
-
-	files := make(map[string]bool)
-	for _, s := range rootSets {
-		visit(s, files, map[string]bool{})
-	}
-
-	log.Println("FIXME packagesFromBazelTargets 45", req.Mode, files)
+	log.Println("FIXME packagesFromBazelTargets 45", mode, files)
 	for fp, _ := range files {
 		resp, err := parseAspectResponse(fp)
 		if err != nil {
@@ -506,12 +437,12 @@ func packagesFromBazelTargets(req *driverRequest, bazelTargets []string, pkgs ma
 		}
 		log.Println("FIXME packagesFromBazelTargets 60", pkg.GoFiles)
 
-		if (req.Mode & packages.NeedDeps) != 0 {
+		if (mode & packages.NeedDeps) != 0 {
 			err = aspectResponseAddFullPackagesToImports(resp, pkg)
 			if err != nil {
 				return err
 			}
-		} else if (req.Mode & packages.NeedImports) != 0 {
+		} else if (mode & packages.NeedImports) != 0 {
 			err = aspectResponseAddIDOnlyPackagesToImports(resp, pkg)
 			if err != nil {
 				return err
