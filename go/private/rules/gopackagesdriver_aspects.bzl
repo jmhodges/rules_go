@@ -61,7 +61,6 @@ def _gopackagesdriver_export_nodeps_aspect_impl(target, ctx):
         ),
     ]
 
-# FIXME unused. Ditch it?
 GoPackagesFilesProvider = provider(
     doc = "Returns the serialized JSON files for packages to be parsed as aspectResponse.",
     fields = {
