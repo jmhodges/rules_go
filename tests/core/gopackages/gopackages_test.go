@@ -83,9 +83,15 @@ go_binary(
     visibility = ["//visibility:public"],
 )
 
+go_library(
+    name = "embedlib",
+    srcs = ["embedme.go"],
+    visibility = ["//visibility:public"],
+)
+
 go_binary(
-    name = "hello_embed_bin",
-    embed = [":hello"],
+    name = "embedbin",
+    embed = [":embedlib"],
     visibility = ["//visibility:public"],
 )
 -- hello.go --
@@ -129,6 +135,14 @@ import "fmt"
 
 func main() {
 	fmt.Println("Hello, World!")
+}
+-- embedme.go --
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Hello, embedded library World!")
 }
 `,
 	})
@@ -292,6 +306,18 @@ func TestSinglePkgPattern(t *testing.T) {
 				},
 			},
 		},
+		{
+			[]string{"//:simplebin"},
+			packages.NeedName | packages.NeedFiles,
+			[]*packages.Package{
+				&packages.Package{
+					ID:      "//:simplebin",
+					Name:    "main",
+					PkgPath: "simplebin",
+					GoFiles: []string{abs("simplebin.go")},
+				},
+			},
+		},
 	}
 
 	for tcInd, tc := range testcases {
@@ -448,10 +474,6 @@ func TestCompiledGoFilesIncludesCgo(t *testing.T) {
 	if !compareFiles(expectedCompiledGoFiles, pkg.CompiledGoFiles) {
 		t.Errorf("CompiledGoFiles: want (without srcFilePrefix) %v, got %v", expectedCompiledGoFiles, pkg.CompiledGoFiles)
 	}
-}
-
-func TestWithDepsInFilesAndExportAspects(t *testing.T) {
-	t.Skipf("doesn't do deps, yet") // FIXME deps!
 }
 
 func TestExportedTypeCheckData(t *testing.T) {
