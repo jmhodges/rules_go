@@ -34,10 +34,11 @@ func TestMain(m *testing.M) {
 	}
 	pwd = wd
 	bazel_testing.TestMain(m, bazel_testing.Args{
+		// FIXME add go_binary with `library` tag.
 		Nogo: "@//:gopackagesdriver_nogo",
 		Main: `
 -- BUILD.bazel --
-load("@io_bazel_rules_go//go:def.bzl", "go_library", "nogo")
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library", "nogo")
 
 nogo(
     name = "gopackagesdriver_nogo",
@@ -75,6 +76,18 @@ go_library(
     visibility = ["//visibility:public"],
 )
 
+go_binary(
+    name = "simplebin",
+    srcs = ["simplebin.go"],
+    deps = [":hello"],
+    visibility = ["//visibility:public"],
+)
+
+go_binary(
+    name = "hello_embed_bin",
+    embed = [":hello"],
+    visibility = ["//visibility:public"],
+)
 -- hello.go --
 package hello
 
@@ -109,6 +122,14 @@ import "fakeimportpath/hello"
 func K() string {
 	return hello.A()
 }
+-- simplebin.go --
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Hello, World!")
+}
 `,
 	})
 }
@@ -131,12 +152,12 @@ func TestSinglePkgPattern(t *testing.T) {
 	}
 
 	testcases := []struct {
-		inputPatterns string
+		inputPatterns []string
 		mode          packages.LoadMode
 		outputPkgs    []*packages.Package
 	}{
 		{
-			"//:hello",
+			[]string{"//:hello"},
 			packages.NeedName,
 			[]*packages.Package{
 				{
@@ -147,7 +168,7 @@ func TestSinglePkgPattern(t *testing.T) {
 			},
 		},
 		{
-			"//:hello",
+			[]string{"//:hello"},
 			packages.NeedName | packages.NeedFiles,
 			[]*packages.Package{
 				{
@@ -159,7 +180,7 @@ func TestSinglePkgPattern(t *testing.T) {
 			},
 		},
 		{
-			"//:hello",
+			[]string{"//:hello"},
 			packages.NeedName | packages.NeedImports,
 			[]*packages.Package{
 				{
@@ -173,7 +194,7 @@ func TestSinglePkgPattern(t *testing.T) {
 			},
 		},
 		{
-			"//:hello_use",
+			[]string{"//:hello_use"},
 			packages.NeedName,
 			[]*packages.Package{
 				{
@@ -185,7 +206,7 @@ func TestSinglePkgPattern(t *testing.T) {
 			},
 		},
 		{
-			"//:hello_use",
+			[]string{"//:hello_use"},
 			packages.NeedName | packages.NeedImports,
 			[]*packages.Package{
 				{
@@ -202,7 +223,7 @@ func TestSinglePkgPattern(t *testing.T) {
 			},
 		},
 		{
-			"//:hello_use",
+			[]string{"//:hello_use"},
 			packages.NeedName | packages.NeedDeps | packages.NeedImports,
 			[]*packages.Package{
 				{
@@ -227,6 +248,50 @@ func TestSinglePkgPattern(t *testing.T) {
 				},
 			},
 		},
+		{
+			[]string{"//:hello", "//:goodbye"},
+			packages.NeedName,
+			[]*packages.Package{
+				&packages.Package{
+					ID:      "//:goodbye",
+					Name:    "goodbye",
+					PkgPath: "fakeimportpath/goodbye",
+				},
+				&packages.Package{
+					ID:      "//:hello",
+					Name:    "hello",
+					PkgPath: "fakeimportpath/hello",
+				},
+			},
+		},
+		{
+			[]string{"//:hello", "//:goodbye"},
+			packages.NeedName | packages.NeedImports,
+			[]*packages.Package{
+				&packages.Package{
+					ID:      "//:goodbye",
+					Name:    "goodbye",
+					PkgPath: "fakeimportpath/goodbye",
+					Imports: map[string]*packages.Package{
+						"fmt": &packages.Package{
+							ID:      "@go_sdk//stdlibstub/fmt",
+							Imports: make(map[string]*packages.Package),
+						},
+					},
+				},
+				&packages.Package{
+					ID:      "//:hello",
+					Name:    "hello",
+					PkgPath: "fakeimportpath/hello",
+					Imports: map[string]*packages.Package{
+						"fmt": &packages.Package{
+							ID:      "@go_sdk//stdlibstub/fmt",
+							Imports: make(map[string]*packages.Package),
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for tcInd, tc := range testcases {
@@ -239,7 +304,7 @@ func TestSinglePkgPattern(t *testing.T) {
 					Context: ctx,
 					Logf:    t.Logf,
 				}
-				pkgs, err := packages.Load(cfg, tc.inputPatterns)
+				pkgs, err := packages.Load(cfg, tc.inputPatterns...)
 				if err != nil {
 					t.Fatalf("unable to packages.Load: %s", err)
 				}
@@ -426,86 +491,6 @@ func TestExportedTypeCheckData(t *testing.T) {
 		t.Errorf("ExportFile: want %#v, got %#v", expectedExportFile, pkg.ExportFile)
 	}
 	// FIXME test type check info from this and test cgo version.
-}
-
-func TestMultiplePatterns(t *testing.T) {
-	driverPath, err := getDriverPath()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("GOPACKAGESDRIVER", driverPath) // FIXME Use Env and os.Environ
-	imports := map[string]*packages.Package{
-		"fmt": &packages.Package{
-			ID:      "@go_sdk//stdlibstub/fmt",
-			Imports: make(map[string]*packages.Package),
-		},
-	}
-	testcases := []struct {
-		inputPatterns []string
-		mode          packages.LoadMode
-		outputPkgs    []*packages.Package
-	}{
-		{
-			[]string{"//:hello", "//:goodbye"},
-			packages.NeedName,
-			[]*packages.Package{
-				&packages.Package{
-					ID:      "//:goodbye",
-					Name:    "goodbye",
-					PkgPath: "fakeimportpath/goodbye",
-				},
-				&packages.Package{
-					ID:      "//:hello",
-					Name:    "hello",
-					PkgPath: "fakeimportpath/hello",
-				},
-			},
-		},
-		{
-			[]string{"//:hello", "//:goodbye"},
-			packages.NeedName | packages.NeedImports,
-			[]*packages.Package{
-				&packages.Package{
-					ID:      "//:goodbye",
-					Name:    "goodbye",
-					PkgPath: "fakeimportpath/goodbye",
-					Imports: imports,
-				},
-				&packages.Package{
-					ID:      "//:hello",
-					Name:    "hello",
-					PkgPath: "fakeimportpath/hello",
-					Imports: imports,
-				},
-			},
-		},
-	}
-
-	for tcInd, tc := range testcases {
-		t.Run(fmt.Sprintf("test-%d", tcInd), func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			cfg := &packages.Config{
-				Mode:    tc.mode,
-				Context: ctx,
-			}
-			pkgs, err := packages.Load(cfg, tc.inputPatterns...)
-			if err != nil {
-				t.Errorf("Load: %s", err)
-				return
-			}
-			if len(tc.outputPkgs) != len(pkgs) {
-				t.Errorf("num pkgs: want %d pkgs, got %d pkgs (want %q, got %q)", len(tc.outputPkgs), len(pkgs), tc.outputPkgs, pkgs)
-			} else {
-				for i, exp := range tc.outputPkgs {
-					if !cmp.Equal(exp, pkgs[i], pkgCmpOpt) {
-						t.Errorf("package %d, diff: %s", i, cmp.Diff(exp, pkgs[i], pkgCmpOpt))
-					}
-				}
-			}
-
-		})
-	}
 }
 
 func TestStdlib(t *testing.T) {

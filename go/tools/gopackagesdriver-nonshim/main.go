@@ -100,10 +100,10 @@ func main() {
 type driverRequest struct {
 	Command    string            `json:"command"` // FIXME ???
 	Mode       packages.LoadMode `json:"mode"`
-	Env        []string          `json:"env"`         // FIXME handle
-	BuildFlags []string          `json:"build_flags"` // FIXME handle
-	Tests      bool              `json:"tests"`       // FIXME handle
-	Overlay    map[string][]byte `json:"overlay"`     // FIXME handle
+	Env        []string          `json:"env"` // FIXME handle
+	BuildFlags []string          `json:"build_flags"`
+	Tests      bool              `json:"tests"`   // FIXME handle
+	Overlay    map[string][]byte `json:"overlay"` // FIXME handle
 }
 
 // driverResponse is a JSON object sent by this program to
