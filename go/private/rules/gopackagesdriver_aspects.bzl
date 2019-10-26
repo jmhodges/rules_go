@@ -9,19 +9,6 @@ load(
     "GoSource",
 )
 
-# FIXME unused. Ditch it?
-GoPackagesFilesProvider = provider(
-    doc = "Returns the ID, Name, PkgPath, Errors, GoFiles, and OtherFiles needed for go/packages.NeedFiles and NeedName modes.",
-    fields = {
-        "id": "The target (acting as unique identifier) of the Go package in bazel.",
-        "name": "Name of the Go package as it appears in the package's source code",
-        "pkg_path": "Package path as used by the go/types package",
-        "errors": "Any errors encountered querying the metadata of the package, or while parsing or type-checking its files.",
-        "go_files": "The absolute file paths of the package's Go source files (as seen after doing the rules_go mode processing).",
-        "other_files": "The absolute file paths of the package's non-Go source files including assembly, C, C++, Fortran, Objective-C, SWIG, and so on (as seen after performing the rules_go mode processing)."
-    },
-)
-
 def _gopackagesdriver_files_nodeps_aspect_impl(target, ctx):
     go = go_context(ctx, ctx.rule.attr)
 
@@ -49,13 +36,11 @@ def _gopackagesdriver_files_nodeps_aspect_impl(target, ctx):
     )]
 
 def _gopackagesdriver_export_nodeps_aspect_impl(target, ctx):
-    go = go_context(ctx, ctx.rule.attr)
-    print("FIXME wtf is", dir(ctx.rule.attr))
-    print("FIXME deps is", ctx.rule.attr.deps)
     source = target[GoSource] if GoSource in target else None
     if not GoLibrary in target:
         # Not a rule we can do anything with
         return []
+    go = go_context(ctx, ctx.rule.attr)
     # We have a library and we need to compile it in a new mode
     library = target[GoLibrary]
     resp = _basic_driver_response(ctx, target, source, library)
@@ -76,33 +61,59 @@ def _gopackagesdriver_export_nodeps_aspect_impl(target, ctx):
         ),
     ]
 
+# FIXME unused. Ditch it?
+GoPackagesFilesProvider = provider(
+    doc = "Returns the serialized JSON files for packages to be parsed as aspectResponse.",
+    fields = {
+        "pkg": "The aspectResponse information about the target (that is also stored in the serialized JSON). Used to walk the dependencies."
+    },
+)
+
 def _gopackagesdriver_export_aspect_impl(target, ctx):
+    source = target[GoSource] if GoSource in target else None
+    if not GoLibrary in target:
+        # Not a rule we can do anything with
+        return None
+
     go = go_context(ctx, ctx.rule.attr)
 
-    resp = _gopackagesdriver_export_aspect_impl_go(target, ctx, go, True)
+    # FIXME remove this check_dep and do it as a loop
+    resp = _gopackagesdriver_export_aspect_impl_go(target, ctx, go)
     if resp == None:
         return []
-    
+    archives = []
+    deps_data = []
+    imports = {}
+    resp["imports"] = imports
+    for targ in ctx.rule.attr.deps:
+        gopack = targ[GoPackagesFilesProvider]
+        if gopack == None:
+            continue
+        imports[gopack.pkg["id"]] = gopack.pkg
+
     json_serialized = struct(**resp).to_json()
 
     filename = "%s.export_aspect.gopackagesdriver.json" % target.label.name
     json_file = ctx.actions.declare_file(filename)
     ctx.actions.write(json_file, json_serialized)
 
-    archives = [target[GoArchive].data.file]
-    for targ in ctx.rule.attr.deps:
-        if targ[GoArchive] != None:
-            archives.append(targ[GoArchive].data.file)
+    archives.append(target[GoArchive].data.file)
 
     return [
+        # FIXME there has to be a better way to get these files to be dropped on
+        # to disk than specifying OutputGroupInfo on top of our own
+        # GoPackagesFilesProvider?
         OutputGroupInfo(
             gopackagesdriver_archives = archives,
             gopackagesdriver_data = [json_file],
         ),
+        GoPackagesFilesProvider(
+            pkg = resp
+        ),
     ]
 
     
-def _gopackagesdriver_export_aspect_impl_go(target, ctx, go, check_deps):
+def _gopackagesdriver_export_aspect_impl_go(target, ctx, go):
     source = target[GoSource] if GoSource in target else None
     if not GoLibrary in target:
         # Not a rule we can do anything with
@@ -114,14 +125,6 @@ def _gopackagesdriver_export_aspect_impl_go(target, ctx, go, check_deps):
     export_resp = _export_driver_response(go, target.label, archive)
     resp.update(**export_resp)
 
-    if check_deps:
-        imports = {}
-        resp["imports"] = imports
-        for targ in source.deps: # FIXME cgo_deps and cdeps
-            dep_resp = _gopackagesdriver_export_aspect_impl_go(targ, ctx, go, False)
-            if dep_resp != None:
-                imports[dep_resp["pkg_path"]] = dep_resp
-                
     return resp
 
 def _label_to_string(label):
@@ -197,6 +200,7 @@ gopackagesdriver_files_nodeps_aspect = aspect(
     _gopackagesdriver_files_nodeps_aspect_impl,
     attr_aspects = [],
     toolchains = ["@io_bazel_rules_go//go:toolchain"],
+    required_aspect_providers = ["GoLibrary", "GoSource", "GoArchive", "GoArchiveData"],
     # FIXME set up `provides` arg
 )
 
@@ -206,16 +210,14 @@ gopackagesdriver_files_nodeps_aspect = aspect(
 gopackagesdriver_export_nodeps_aspect = aspect(
     _gopackagesdriver_export_nodeps_aspect_impl,
     toolchains = ["@io_bazel_rules_go//go:toolchain"],
-    required_aspect_providers = ["GoArchive", "GoArchiveData"],
-    # FIXME set up `provides` arg?
+    required_aspect_providers = ["GoLibrary", "GoSource", "GoArchive", "GoArchiveData"],
 )
 
 gopackagesdriver_export_aspect = aspect(
     _gopackagesdriver_export_aspect_impl,
     toolchains = ["@io_bazel_rules_go//go:toolchain"],
     attr_aspects = ["deps"],
-    required_aspect_providers = ["GoArchive", "GoArchiveData"],
-    # FIXME set up `provides` arg
+    required_aspect_providers = ["GoLibrary", "GoSource", "GoArchive", "GoArchiveData"],
 )
 
 # FIXME delete this

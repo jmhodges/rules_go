@@ -104,10 +104,10 @@ var foo = int(C.foo)
 -- hello_use.go --
 package hello_use
 
-import "hello"
+import "fakeimportpath/hello"
 
 func K() string {
-	hello.A()
+	return hello.A()
 }
 `,
 	})
@@ -133,37 +133,97 @@ func TestSinglePkgPattern(t *testing.T) {
 	testcases := []struct {
 		inputPatterns string
 		mode          packages.LoadMode
-		outputPkg     *packages.Package
+		outputPkgs    []*packages.Package
 	}{
 		{
 			"//:hello",
 			packages.NeedName,
-			&packages.Package{
-				ID:      "//:hello",
-				Name:    "hello",
-				PkgPath: "fakeimportpath/hello",
+			[]*packages.Package{
+				{
+					ID:      "//:hello",
+					Name:    "hello",
+					PkgPath: "fakeimportpath/hello",
+				},
 			},
 		},
 		{
 			"//:hello",
 			packages.NeedName | packages.NeedFiles,
-			&packages.Package{
-				ID:      "//:hello",
-				Name:    "hello",
-				PkgPath: "fakeimportpath/hello",
-				GoFiles: []string{abs("hello.go")},
+			[]*packages.Package{
+				{
+					ID:      "//:hello",
+					Name:    "hello",
+					PkgPath: "fakeimportpath/hello",
+					GoFiles: []string{abs("hello.go")},
+				},
 			},
 		},
-
 		{
 			"//:hello",
 			packages.NeedName | packages.NeedImports,
-			&packages.Package{
-				ID:      "//:hello",
-				Name:    "hello",
-				PkgPath: "fakeimportpath/hello",
-				Imports: map[string]*packages.Package{
-					"fmt": fmtPkg,
+			[]*packages.Package{
+				{
+					ID:      "//:hello",
+					Name:    "hello",
+					PkgPath: "fakeimportpath/hello",
+					Imports: map[string]*packages.Package{
+						"fmt": fmtPkg,
+					},
+				},
+			},
+		},
+		{
+			"//:hello_use",
+			packages.NeedName,
+			[]*packages.Package{
+				{
+					ID:      "//:hello_use",
+					Name:    "hello_use",
+					PkgPath: "fakeimportpath/hello_use",
+					Imports: nil,
+				},
+			},
+		},
+		{
+			"//:hello_use",
+			packages.NeedName | packages.NeedImports,
+			[]*packages.Package{
+				{
+					ID:      "//:hello_use",
+					Name:    "hello_use",
+					PkgPath: "fakeimportpath/hello_use",
+					Imports: map[string]*packages.Package{
+						"fakeimportpath/hello": &packages.Package{
+							ID:      "//:hello",
+							Imports: make(map[string]*packages.Package),
+						},
+					},
+				},
+			},
+		},
+		{
+			"//:hello_use",
+			packages.NeedName | packages.NeedDeps | packages.NeedImports,
+			[]*packages.Package{
+				{
+					ID:      "//:hello_use",
+					Name:    "hello_use",
+					PkgPath: "fakeimportpath/hello_use",
+					Imports: map[string]*packages.Package{
+						"fakeimportpath/hello": &packages.Package{
+							ID:      "//:hello",
+							Name:    "hello",
+							PkgPath: "fakeimportpath/hello",
+							Imports: map[string]*packages.Package{
+								"fmt": &packages.Package{
+									ID:      "@go_sdk//stdlibstub/fmt",
+									Name:    "fmt",
+									PkgPath: "fmt",
+									Imports: make(map[string]*packages.Package),
+								},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -177,19 +237,17 @@ func TestSinglePkgPattern(t *testing.T) {
 				cfg := &packages.Config{
 					Mode:    tc.mode,
 					Context: ctx,
+					Logf:    t.Logf,
 				}
-				pkgs, err := packages.Load(cfg, "//:hello")
+				pkgs, err := packages.Load(cfg, tc.inputPatterns)
 				if err != nil {
 					t.Fatalf("unable to packages.Load: %s", err)
 				}
-				if len(pkgs) < 1 {
-					t.Fatalf("no packages returned")
+				if len(pkgs) != len(tc.outputPkgs) {
+					t.Errorf("too many packages returned: want %d, got %d", len(tc.outputPkgs), len(pkgs))
 				}
-				if len(pkgs) != 1 {
-					t.Errorf("too many packages returned: want 1, got %d", len(pkgs))
-				}
-				if !cmp.Equal(tc.outputPkg, pkgs[0], pkgCmpOpt) {
-					t.Errorf("Packages didn't match, diff: %s", cmp.Diff(tc.outputPkg, pkgs[0], pkgCmpOpt))
+				if !cmp.Equal(tc.outputPkgs, pkgs, pkgCmpOpt) {
+					t.Errorf("Packages didn't match, diff: %s", cmp.Diff(tc.outputPkgs, pkgs, pkgCmpOpt))
 				}
 			})
 	}

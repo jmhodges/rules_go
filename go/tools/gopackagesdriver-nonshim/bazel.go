@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -22,7 +24,7 @@ func bazelBuildAspects(mode packages.LoadMode, buildFlags []string, bazelTargets
 	aspect := "@io_bazel_rules_go//go:def.bzl%"
 	// FIXME this needs to be regularized
 	if (mode & packages.NeedDeps) != 0 {
-		outputGroups += ",gopackagesdriver_archives"
+		outputGroups += ",gopackagesdriver_archives,gopackagesdriver_deps_data"
 		aspect += "gopackagesdriver_export"
 	} else if mode&(packages.NeedCompiledGoFiles|packages.NeedExportsFile|packages.NeedImports) != 0 {
 		outputGroups += ",gopackagesdriver_archives"
@@ -148,4 +150,34 @@ func extractBazelAspectOutputFilePaths(pbuf *proto.Buffer) (map[string]bool, err
 		visit(s, files, map[string]bool{})
 	}
 	return files, nil
+}
+
+// FIXME make it so we can conditionally print out all of the commands and args we exec to
+// stderr.
+func bazelQuery(args ...string) ([]byte, error) {
+	newArgs := make([]string, 0, len(args)+1)
+	newArgs = append(newArgs, "query")
+	newArgs = append(newArgs, args...)
+	return bazelOutput(newArgs...)
+}
+
+func bazelOutput(args ...string) ([]byte, error) {
+	cmd := exec.Command("bazel")
+	cmd.Args = append(cmd.Args, args...)
+	log.Println("1FIXME bazelQuery 002: bazel out", cmd.Args)
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	err := cmd.Run()
+	if eErr, ok := err.(*exec.ExitError); ok {
+		eErr.Stderr = stderr.Bytes()
+		err = &StderrExitError{Err: eErr}
+	}
+	// FIXME just always use os.Stderr?
+	os.Stderr.Write(stderr.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	return stdout.Bytes(), nil
 }
