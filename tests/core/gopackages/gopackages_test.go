@@ -459,7 +459,7 @@ func TestSingleFilePattern(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unable to get goodbye_other.go's absolute file path")
 		}
-		pkgs, err = packages.Load(cfg, fmt.Sprintf("file=%s", absPath))
+		pkgs, err = packages.Load(cfg, fmt.Sprintf("file=%s", abs("goodbye_other.go")))
 		if err != nil {
 			t.Fatalf("unable to packages.Load: %s", err)
 		}
@@ -475,8 +475,8 @@ func TestSingleFilePattern(t *testing.T) {
 		if expectedImportPath != pkg.PkgPath {
 			t.Errorf("abolute path, PkgPath: want %#v, got %#v", expectedImportPath, pkg.PkgPath)
 		}
-		if !compareFiles(expectedGoFiles, pkg.GoFiles) {
-			t.Errorf("absolute path, GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
+		if err := compareFiles(expectedGoFiles, pkg.GoFiles); err != nil {
+			t.Errorf("absolute path, GoFiles, error: %s", err)
 		}
 	*/
 }
@@ -604,7 +604,7 @@ func TestExportedTypeCheckData(t *testing.T) {
 			t.Errorf("Imports, diff: %s", cmp.Diff(expected, actual))
 		}
 	}
-	// FIXME test type check info from this and test cgo version.
+	// FIXME test cgo version.
 }
 
 func TestStdlib(t *testing.T) {
