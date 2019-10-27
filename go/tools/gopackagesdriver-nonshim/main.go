@@ -87,6 +87,15 @@ func main() {
 	// }
 	// defer f.Close()
 	// log.SetOutput(f)
+	// log.Println("PWD is", os.Getenv("PWD"))
+	// fis, err := ioutil.ReadDir(os.Getenv("PWD"))
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// log.Println("ls is:")
+	// for _, fi := range fis {
+	// 	log.Println(fi.Name())
+	// }
 	// log.Println("FIXME main 001: targets", os.Args)
 	// log.SetPrefix("gopackagesdriver: ")
 	// log.SetFlags(0)
@@ -575,7 +584,7 @@ func addIDOnlyPackagesToImports(depImpToLabels map[string]string, pkg *packages.
 func aspectResponseToPackage(resp *aspectResponse, pwd string) *packages.Package {
 	// FIXME check all the places that gopls's golist driver (golist.go, etc.)
 	// plops stuff into the Errors struct.
-	log.Println("FIXME aspectResponseToPackage 1", resp.GoFiles)
+	log.Println("FIXME aspectResponseToPackage 1", resp.GoFiles, resp.ExportFile)
 	return &packages.Package{
 		ID:              resp.ID,
 		Name:            resp.Name,
@@ -599,6 +608,7 @@ func absolutizeFilePaths(pwd string, fps []string) []string {
 	return abs
 }
 
+// FIXME there's got to be a better way. talk to jay
 var stdlibExportPrefix = filepath.Join(os.Getenv("GOROOT"), "pkg", os.Getenv("GOOS")+"_"+os.Getenv("GOARCH"))
 
 // FIXME not actually working. this is for gopls.
