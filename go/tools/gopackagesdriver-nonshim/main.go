@@ -81,12 +81,12 @@ var modes = []modeInfo{
 }
 
 func main() {
-	// f, err := os.OpenFile("/Users/jmhodges/Desktop/wut.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	// if err != nil {
-	// 	log.Fatalf("couldn't open log file: %s", err)
-	// }
-	// defer f.Close()
-	// log.SetOutput(f)
+	f, err := os.OpenFile("/Users/jmhodges/Desktop/wut.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("couldn't open log file: %s", err)
+	}
+	defer f.Close()
+	log.SetOutput(f)
 	// log.Println("PWD is", os.Getenv("PWD"))
 	// fis, err := ioutil.ReadDir(os.Getenv("PWD"))
 	// if err != nil {
@@ -406,14 +406,21 @@ func packagesFromBazelTargets(mode packages.LoadMode, buildFlags []string, bazel
 	if err != nil {
 		return err
 	}
-
+	targMap := make(map[string]bool, len(bazelTargets))
+	for _, t := range bazelTargets {
+		targMap[t] = true
+	}
 	log.Println("FIXME packagesFromBazelTargets 45:", mode, files)
 	for fp, _ := range files {
 		resp, err := parseAspectResponse(fp)
 		if err != nil {
 			return fmt.Errorf("unable to parse JSON response in file %#v in returened aspect: %s", fp, err)
 		}
-		_, found := pkgs[packageID(resp.ID)]
+		respID := packageID(resp.ID)
+		if !targMap[respID] {
+			// Got a top-level package for a target that wasn't one of the ones we asked for. This means we picked up either a
+		}
+		_, found := pkgs[respID]
 		if found {
 			continue
 		}

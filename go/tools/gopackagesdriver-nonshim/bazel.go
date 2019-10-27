@@ -62,7 +62,7 @@ func bazelBuildAspects(mode packages.LoadMode, buildFlags []string, bazelTargets
 	cmd.Args = append(cmd.Args, buildFlags...)
 	cmd.Args = append(cmd.Args, "--")
 	cmd.Args = append(cmd.Args, strTargs...)
-
+	log.Println("FIXME bazelBuildAspects 75 cmd.Args:", cmd.Args)
 	cmd.Stdout = os.Stderr // sic
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

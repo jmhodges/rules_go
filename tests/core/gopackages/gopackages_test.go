@@ -67,7 +67,10 @@ go_library(
 
 go_library(
 	name = "hascgo",
-	srcs = ["hascgo.go"],
+	srcs = [
+        "hascgo.go",
+        "nocgo.go",
+    ],
 	importpath = "fakeimportpath/hascgo",
 	visibility = ["//visibility:public"],
 	cgo = True,
@@ -126,6 +129,11 @@ package hascgo
 import "C"
 
 var foo = int(C.foo)
+-- nocgo.go --
+package hascgo
+
+func K() int { return 1 }
+
 -- hello_use.go --
 package hello_use
 
@@ -324,11 +332,12 @@ func TestPatterns(t *testing.T) {
 				},
 			},
 		},
-		{
-			[]string{"//:embedbin"},
-			packages.NeedName | packages.NeedFiles | packages.NeedImports | packages.NeedDeps,
-			[]*packages.Package{},
-		},
+		// FIXME requires better handling of embed
+		// {
+		// 	[]string{"//:embedbin"},
+		// 	packages.NeedName | packages.NeedFiles | packages.NeedImports | packages.NeedDeps,
+		// 	[]*packages.Package{},
+		// },
 		{
 			[]string{"file=embedme.go"},
 			packages.NeedName | packages.NeedFiles | packages.NeedImports | packages.NeedDeps,
@@ -354,6 +363,48 @@ func TestPatterns(t *testing.T) {
 							Imports: make(map[string]*packages.Package),
 						},
 					},
+				},
+			},
+		},
+		{
+			[]string{"//:hascgo"},
+			packages.NeedName | packages.NeedFiles,
+			[]*packages.Package{
+				{
+					ID:      "//:hascgo",
+					Name:    "hascgo",
+					PkgPath: "fakeimportpath/hascgo",
+					GoFiles: []string{abs("hascgo.go"), abs("nocgo.go")},
+				},
+			},
+		},
+		{
+			[]string{"//:hascgo"},
+			packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles,
+			[]*packages.Package{
+				{
+					ID:      "//:hascgo",
+					Name:    "hascgo",
+					PkgPath: "fakeimportpath/hascgo",
+					GoFiles: []string{abs("hascgo.go"), abs("nocgo.go")},
+					CompiledGoFiles: []string{
+						abs("hascgo.go"),
+						abs("nocgo.go"),
+						"someextra",
+					},
+				},
+			},
+		},
+		{
+			[]string{"//:hello"},
+			packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles,
+			[]*packages.Package{
+				{
+					ID:              "//:hello",
+					Name:            "hello",
+					PkgPath:         "fakeimportpath/hello",
+					GoFiles:         []string{abs("hello.go")},
+					CompiledGoFiles: []string{abs("hello.go")},
 				},
 			},
 		},
