@@ -3,9 +3,11 @@ package gopackages_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -338,10 +340,15 @@ func TestSinglePkgPattern(t *testing.T) {
 					t.Errorf("too many packages returned: want %d, got %d", len(tc.outputPkgs), len(pkgs))
 				}
 				if !cmp.Equal(tc.outputPkgs, pkgs, pkgCmpOpt) {
-					t.Errorf("Packages didn't match, diff: %s", cmp.Diff(tc.outputPkgs, pkgs, pkgCmpOpt))
+					t.Errorf("packages from patterns %s didn't match, diff: %s", tc.inputPatterns, cmp.Diff(tc.outputPkgs, pkgs, pkgCmpOpt))
 				}
 			})
 	}
+}
+
+type shaOrError struct {
+	Sha string
+	Err error
 }
 
 var pkgCmpOpt = cmp.FilterPath(
@@ -353,12 +360,14 @@ var pkgCmpOpt = cmp.FilterPath(
 		return false
 	},
 	cmp.Transformer(
-		"ResolveSymlinksIfTheyExist",
-		func(xs []string) []string {
+		"TurnFilePathsIntoSha256OfContents",
+		func(xs []string) []shaOrError {
+			out := make([]shaOrError, len(xs))
 			for i, x := range xs {
-				xs[i] = resolveLink(x)
+				sum, err := shasum(resolveLink(x))
+				out[i] = shaOrError{Sha: fmt.Sprintf("%x", sum), Err: err}
 			}
-			return xs
+			return out
 		},
 	),
 )
@@ -400,8 +409,8 @@ func TestSingleFilePattern(t *testing.T) {
 		t.Errorf("PkgPath: want %#v, got %#v", expectedImportPath, pkg.PkgPath)
 	}
 	expectedGoFiles := []string{"goodbye.go", "goodbye_other.go"}
-	if !compareFiles(expectedGoFiles, pkg.GoFiles) {
-		t.Errorf("GoFiles: want (without srcFilePrefix) %v, got %v", expectedGoFiles, pkg.GoFiles)
+	if err := compareFiles(expectedGoFiles, pkg.GoFiles); err != nil {
+		t.Errorf("GoFiles: expected contenst of  %s didn't match those of %s: %s", expectedGoFiles, pkg.GoFiles, err)
 	}
 
 	// FIXME Testing for absolute files doesn't seem to work because we can't do
@@ -471,8 +480,8 @@ func TestCompiledGoFilesIncludesCgo(t *testing.T) {
 		t.Errorf("PkgPath: want %#v, got %#v", expectedImportPath, pkg.PkgPath)
 	}
 	expectedCompiledGoFiles := []string{"FIXME foobar"}
-	if !compareFiles(expectedCompiledGoFiles, pkg.CompiledGoFiles) {
-		t.Errorf("CompiledGoFiles: want (without srcFilePrefix) %v, got %v", expectedCompiledGoFiles, pkg.CompiledGoFiles)
+	if err := compareFiles(expectedCompiledGoFiles, pkg.CompiledGoFiles); err != nil {
+		t.Errorf("CompiledGoFiles: contents of expected files %s didn't match those of %s: %s", expectedCompiledGoFiles, pkg.CompiledGoFiles, err)
 	}
 }
 
@@ -509,22 +518,14 @@ func TestExportedTypeCheckData(t *testing.T) {
 		t.Errorf("ID: want %#v, got %#v", expectedID, pkg.ID)
 	}
 	expectedExportFile := "hello.a"
-	if compareFile(expectedExportFile, pkg.ExportFile) {
-		t.Errorf("ExportFile: want %#v, got %#v", expectedExportFile, pkg.ExportFile)
+	if err := compareFile(expectedExportFile, pkg.ExportFile); err != nil {
+		t.Errorf("ExportFile: expected contents of %#v, didn't match %#v: %s", expectedExportFile, pkg.ExportFile, err)
 	}
 	// FIXME test type check info from this and test cgo version.
 }
 
 func TestStdlib(t *testing.T) {
-	// FIXME
-	root, err := bazel_testing.BazelOutput("info", "execution_root")
-	if err != nil {
-		t.Fatalf("unable to get bazel execution_root: %s", err)
-	}
-	t.Logf("FIXME execution_root is %#v", string(root))
-
-	os.Setenv("BAZEL_DROP_TEST_ENV", "1")
-
+	// FIXME stdlib command packages should have "main" for their Name
 	testcases := []struct {
 		inputPatterns []string
 		mode          packages.LoadMode
@@ -677,21 +678,45 @@ func getDriverPath() (string, error) {
 	return driverPath, nil
 }
 
-// FIXME move func below tests?
-func compareFiles(expected, actual []string) bool {
+func compareFiles(expected, actual []string) error {
 	if len(expected) != len(actual) {
-		return false
+		return fmt.Errorf("number of files expected was %d, but got %d", len(expected), len(actual))
 	}
 	for i, exp := range expected {
-		if !compareFile(exp, actual[i]) {
-			return false
+		if err := compareFile(exp, actual[i]); err != nil {
+			return err
 		}
 	}
-	return true
+	return nil
 }
 
-func compareFile(expected, actual string) bool {
-	return abs(expected) == resolveLink(actual)
+func compareFile(expected, actual string) error {
+	// Between bazel and bazel_testing's symlinking and cd'ing, comparing the
+	// file paths to source code we can easily construct in these tests and the
+	// file paths that gopackagesdriver-nonshim has the context to construct is
+	// a no go. Things like symlinks of directories a few levels above the base
+	// file, etc., make comparing them difficult, at best.  So, we've got to
+	// pick up the actual files and compare the contents.
+	exp, err := shasum(abs(expected))
+	if err != nil {
+		return fmt.Errorf("error hashing contents of expected %#v path: %w", expected, err)
+	}
+	act, err := shasum(resolveLink(actual))
+	if err != nil {
+		return fmt.Errorf("error hashing contents of actual output %#v path: %w", actual, err)
+	}
+	if exp != act {
+		return fmt.Errorf("sha256 of expected file %#v and actual file %#v contents didn't match", expected, actual)
+	}
+	return nil
+}
+
+func shasum(fp string) ([sha256.Size]byte, error) {
+	b, err := ioutil.ReadFile(fp)
+	if err != nil {
+		return [sha256.Size]byte{}, err
+	}
+	return sha256.Sum256(b), nil
 }
 
 func abs(filePath string) string {
