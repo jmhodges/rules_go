@@ -7,6 +7,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"go/importer"
+	"go/token"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -498,28 +501,74 @@ func TestExportedTypeCheckData(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	cfg := &packages.Config{
-		Mode:    packages.NeedExportsFile,
+		Mode:    packages.NeedExportsFile | packages.NeedName | packages.NeedImports | packages.NeedDeps,
 		Context: ctx,
 	}
-	pkgs, err := packages.Load(cfg, "//:hello")
+	loadPkgs, err := packages.Load(cfg, "//:hello")
 	if err != nil {
 		t.Fatalf("unable to packages.Load: %s", err)
 	}
 
-	if len(pkgs) < 1 {
+	if len(loadPkgs) < 1 {
 		t.Fatalf("no packages returned")
 	}
-	if len(pkgs) != 1 {
-		t.Errorf("too many packages returned: want 1, got %d", len(pkgs))
+	if len(loadPkgs) != 1 {
+		t.Errorf("too many packages returned: want 1, got %d", len(loadPkgs))
 	}
-	pkg := pkgs[0]
+	pkg := loadPkgs[0]
 	expectedID := "//:hello"
 	if pkg.ID != expectedID {
 		t.Errorf("ID: want %#v, got %#v", expectedID, pkg.ID)
 	}
-	expectedExportFile := "hello.a"
-	if err := compareFile(expectedExportFile, pkg.ExportFile); err != nil {
-		t.Errorf("ExportFile: expected contents of %#v, didn't match %#v: %s", expectedExportFile, pkg.ExportFile, err)
+	if filepath.Base(pkg.ExportFile) != "hello.a" {
+		t.Errorf("ExportFile: expected export file to end in 'hello.a', but was %s", pkg.ExportFile)
+	}
+	libs := make(map[string]string)
+	var visit func(ps map[string]string, p *packages.Package)
+	visit = func(ps map[string]string, p *packages.Package) {
+		libs[p.PkgPath] = p.ExportFile
+		for _, ipkg := range p.Imports {
+			visit(ps, ipkg)
+		}
+	}
+	visit(libs, pkg)
+	fset := token.NewFileSet()
+	lookup := func(path string) (io.ReadCloser, error) {
+		exportfile, found := libs[path]
+		if !found {
+			return nil, fmt.Errorf("unknown import path %s given to our test lookup func (we have %s)", path, libs)
+		}
+		return os.Open(exportfile)
+	}
+	impr := importer.ForCompiler(fset, "gc", lookup)
+	imprPkg, err := impr.Import("fakeimportpath/hello")
+	if err != nil {
+		t.Fatalf("error returned trying to import hello: %s", err)
+	}
+	if imprPkg.Name() != "hello" {
+		t.Errorf("Name: want \"hello\", got %#v", imprPkg.Name())
+	}
+	if imprPkg.Path() != "fakeimportpath/hello" {
+		t.Errorf("Name: want \"fakeimportpath/hello\", got %#v", imprPkg.Path())
+	}
+	if len(pkg.Imports) != len(imprPkg.Imports()) {
+		t.Errorf("Imports: want %d imports, got %d imports", len(pkg.Imports), len(imprPkg.Imports()))
+	} else {
+		type commonPkg struct {
+			Name    string
+			PkgPath string
+		}
+		var expected []commonPkg
+		var actual []commonPkg
+		for _, ipkg := range pkg.Imports {
+			expected = append(expected, commonPkg{Name: ipkg.Name, PkgPath: ipkg.PkgPath})
+		}
+		for _, imprIPkg := range imprPkg.Imports() {
+			actual = append(actual, commonPkg{Name: imprIPkg.Name(), PkgPath: imprIPkg.Path()})
+		}
+		if !cmp.Equal(expected, actual) {
+			t.Errorf("Imports, diff: %s", cmp.Diff(expected, actual))
+		}
 	}
 	// FIXME test type check info from this and test cgo version.
 }
@@ -714,7 +763,7 @@ func compareFile(expected, actual string) error {
 func shasum(fp string) ([sha256.Size]byte, error) {
 	b, err := ioutil.ReadFile(fp)
 	if err != nil {
-		return [sha256.Size]byte{}, err
+		return [sha256.Size]byte{}, fmt.Errorf("unable to read file %#v: %s", fp, err)
 	}
 	return sha256.Sum256(b), nil
 }
