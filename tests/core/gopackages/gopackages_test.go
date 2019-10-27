@@ -91,6 +91,7 @@ go_binary(
 go_library(
     name = "embedlib",
     srcs = ["embedme.go"],
+    importpath = "anotherfakepath/embedlib",
     visibility = ["//visibility:public"],
 )
 
@@ -154,7 +155,7 @@ func main() {
 }
 
 // FIXME rename file to gopackagesdriver_test.go
-func TestSinglePkgPattern(t *testing.T) {
+func TestPatterns(t *testing.T) {
 	// check we can actually build :hello
 	if err := bazel_testing.RunBazel("build", "//:hello"); err != nil {
 		t.Fatalf("unable to build //:hello normally: %s", err)
@@ -320,6 +321,39 @@ func TestSinglePkgPattern(t *testing.T) {
 					Name:    "main",
 					PkgPath: "simplebin",
 					GoFiles: []string{abs("simplebin.go")},
+				},
+			},
+		},
+		{
+			[]string{"//:embedbin"},
+			packages.NeedName | packages.NeedFiles | packages.NeedImports | packages.NeedDeps,
+			[]*packages.Package{},
+		},
+		{
+			[]string{"file=embedme.go"},
+			packages.NeedName | packages.NeedFiles | packages.NeedImports | packages.NeedDeps,
+			[]*packages.Package{
+				&packages.Package{
+					ID: "//:embedlib",
+					// FIXME this should be "main", but we don't currently pull that data.
+					Name:    "embedlib",
+					PkgPath: "anotherfakepath/embedlib",
+					GoFiles: []string{abs("embedme.go")},
+					Imports: map[string]*packages.Package{
+						"fmt": &packages.Package{
+							ID:      "@go_sdk//stdlibstub/fmt",
+							Name:    "fmt",
+							PkgPath: "fmt",
+							GoFiles: []string{
+								abs("external/go_sdk/src/fmt/doc.go"),
+								abs("external/go_sdk/src/fmt/errors.go"),
+								abs("external/go_sdk/src/fmt/format.go"),
+								abs("external/go_sdk/src/fmt/print.go"),
+								abs("external/go_sdk/src/fmt/scan.go"),
+							},
+							Imports: make(map[string]*packages.Package),
+						},
+					},
 				},
 			},
 		},
