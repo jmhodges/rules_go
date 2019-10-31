@@ -81,12 +81,12 @@ var modes = []modeInfo{
 }
 
 func main() {
-	f, err := os.OpenFile("/Users/jmhodges/Desktop/wut.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		log.Fatalf("couldn't open log file: %s", err)
-	}
-	defer f.Close()
-	log.SetOutput(f)
+	// f, err := os.OpenFile("/Users/jmhodges/Desktop/wut.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	// if err != nil {
+	// 	log.Fatalf("couldn't open log file: %s", err)
+	// }
+	// defer f.Close()
+	// log.SetOutput(f)
 	// log.Println("PWD is", os.Getenv("PWD"))
 	// fis, err := ioutil.ReadDir(os.Getenv("PWD"))
 	// if err != nil {
