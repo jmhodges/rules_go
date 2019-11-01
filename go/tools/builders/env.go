@@ -160,7 +160,7 @@ func runAndLogCommand(cmd *exec.Cmd, verbose bool) error {
 		formatCommand(os.Stderr, cmd)
 	}
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("error running subcommand: %v", err)
+		return fmt.Errorf("error running subcommand (%s): %v", cmd, err)
 	}
 	return nil
 }

@@ -69,6 +69,13 @@ def emit_archive(go, source = None):
     importmap = "main" if source.library.is_main else source.library.importmap
     importpath, _ = effective_importpath_pkgpath(source.library)
 
+    # The name suffix is necessary for cases like `go_test` with an `embed`
+    # paramater. `go_test` makes two archive (.a) files in the same directory
+    # while they both share the same label name since they're made by the same
+    # target. The suffix should suffice since library.name is also where the
+    # basenames of the archive files comes from.
+    gen_output_dir = go.declare_file(go, path = "compilepkg_generated_"+source.library.name)
+
     if source.cgo and not go.mode.pure:
         # TODO(jayconrod): do we need to do full Bourne tokenization here?
         cppopts = [f for fs in source.cppopts for f in fs.split(" ")]
@@ -107,6 +114,7 @@ def emit_archive(go, source = None):
             objcopts = cgo.objcopts,
             objcxxopts = cgo.objcxxopts,
             clinkopts = cgo.clinkopts,
+            gen_output_dir = gen_output_dir,
             testfilter = testfilter,
         )
     else:
@@ -122,6 +130,7 @@ def emit_archive(go, source = None):
             out_export = out_export,
             gc_goopts = source.gc_goopts,
             cgo = False,
+            gen_output_dir = gen_output_dir,
             testfilter = testfilter,
         )
 
@@ -136,6 +145,7 @@ def emit_archive(go, source = None):
         export_file = out_export,
         srcs = as_tuple(source.srcs),
         orig_srcs = as_tuple(source.orig_srcs),
+        generated_srcs_dir = gen_output_dir,
         data_files = as_tuple(data_files),
         searchpath = searchpath,
     )

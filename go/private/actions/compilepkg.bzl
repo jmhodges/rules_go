@@ -50,11 +50,14 @@ def emit_compilepkg(
         out_export = None,
         out_cgo_export_h = None,
         gc_goopts = [],
+        gen_output_dir = None,
         testfilter = None):  # TODO: remove when test action compiles packages
     if sources == None:
         fail("sources is a required parameter")
     if out_lib == None:
         fail("out_lib is a required parameter")
+    if gen_output_dir == None:
+        fail("gen_output_dir is a required parameter")
 
     inputs = (sources + [go.package_list] +
               [archive.data.file for archive in archives] +
@@ -105,6 +108,8 @@ def emit_compilepkg(
     asm_flags.extend(link_mode_args(go.mode))
     args.add("-gcflags", _quote_opts(gc_flags))
     args.add("-asmflags", _quote_opts(asm_flags))
+    args.add("-genoutdir", gen_output_dir.path)
+    outputs.append(gen_output_dir)
 
     env = go.env
     if cgo:

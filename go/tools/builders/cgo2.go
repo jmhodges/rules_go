@@ -23,13 +23,15 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
 
 // cgo2 processes a set of mixed source files with cgo.
-func cgo2(goenv *env, goSrcs, cgoSrcs, cSrcs, cxxSrcs, objcSrcs, objcxxSrcs, sSrcs, hSrcs []string, packagePath, packageName string, cc string, cppFlags, cFlags, cxxFlags, objcFlags, objcxxFlags, ldFlags []string, cgoExportHPath string) (srcDir string, allGoSrcs, cObjs []string, err error) {
+func cgo2(goenv *env, goSrcs, cgoSrcs, cSrcs, cxxSrcs, objcSrcs, objcxxSrcs, sSrcs, hSrcs []string, packagePath, packageName string, cc string, cppFlags, cFlags, cxxFlags, objcFlags, objcxxFlags, ldFlags []string, cgoExportHPath, genOutDir string) (srcDir string, allGoSrcs, cObjs []string, err error) {
 	// Report an error if the C/C++ toolchain wasn't configured.
 	if cc == "" {
 		err := cgoError(cgoSrcs[:])
@@ -124,7 +126,7 @@ func cgo2(goenv *env, goSrcs, cgoSrcs, cSrcs, cxxSrcs, objcSrcs, objcxxSrcs, sSr
 	}
 	hdrIncludes = append(hdrIncludes, "-iquote", workDir) // for _cgo_export.h
 
-	args := goenv.goTool("cgo", "-srcdir", srcDir, "-objdir", workDir)
+	args := goenv.goTool("cgo", "-srcdir", srcDir, "-objdir", genOutDir)
 	if packagePath != "" {
 		args = append(args, "-importpath", packagePath)
 	}
@@ -137,11 +139,26 @@ func cgo2(goenv *env, goSrcs, cgoSrcs, cSrcs, cxxSrcs, objcSrcs, objcxxSrcs, sSr
 		return "", nil, nil, err
 	}
 
+	var genSrcPaths []string
+	fis, err := ioutil.ReadDir(genOutDir)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	for _, fi := range fis {
+		genSrcPaths = append(genSrcPaths, path.Join(genOutDir, fi.Name()))
+	}
+
 	if cgoExportHPath != "" {
 		if err := copyFile(filepath.Join(workDir, "_cgo_export.h"), cgoExportHPath); err != nil {
 			return "", nil, nil, err
 		}
 	}
+
+	_, err = gatherSrcs(workDir, genSrcPaths)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
 	genGoSrcs := make([]string, 1+len(cgoSrcs))
 	genGoSrcs[0] = filepath.Join(workDir, "_cgo_gotypes.go")
 	genCSrcs := make([]string, 1+len(cgoSrcs))
