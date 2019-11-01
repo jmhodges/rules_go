@@ -282,6 +282,13 @@ func compileArchive(
 
 		gcFlags = append(gcFlags, "-trimpath="+srcDir)
 	} else {
+		if cgoGenSrc != "" {
+			f, err := os.Create(cgoGenSrc)
+			if err != nil {
+				return fmt.Errorf("unable to create empty %#v file with cgo disabled: %s", cgoGenSrc, err)
+			}
+			defer f.Close()
+		}
 		if cgoExportHPath != "" {
 			if err := ioutil.WriteFile(cgoExportHPath, nil, 0666); err != nil {
 				return err

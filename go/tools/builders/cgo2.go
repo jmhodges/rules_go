@@ -48,6 +48,11 @@ func cgo2(goenv *env, goSrcs, cgoSrcs, cSrcs, cxxSrcs, objcSrcs, objcxxSrcs, sSr
 	// might miss dependencies like -lstdc++ if they aren't referenced in
 	// some other way.
 	if len(cgoSrcs) == 0 {
+		f, err := os.Create(cgoGenSrc)
+		if err != nil {
+			return "", nil, nil, fmt.Errorf("unable to create empty %#v file with only C/C++ sources given: %s", cgoGenSrc, err)
+		}
+		defer f.Close()
 		cObjs, err = compileCSources(goenv, cSrcs, cxxSrcs, objcSrcs, objcxxSrcs, sSrcs, hSrcs, cc, cppFlags, cFlags, cxxFlags, objcFlags, objcxxFlags)
 		return ".", nil, cObjs, err
 	}
@@ -57,7 +62,6 @@ func cgo2(goenv *env, goSrcs, cgoSrcs, cSrcs, cxxSrcs, objcSrcs, objcxxSrcs, sSr
 		return "", nil, nil, err
 	}
 	defer cleanup()
-
 	// Filter out -lstdc++ and -lc++ from ldflags if we don't have C++ sources,
 	// and set CGO_LDFLAGS. These flags get written as special comments into cgo
 	// generated sources. The compiler encodes those flags in the compiled .a
