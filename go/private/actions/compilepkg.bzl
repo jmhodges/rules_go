@@ -40,6 +40,7 @@ def emit_compilepkg(
         archives = [],
         cgo = False,
         cgo_inputs = depset(),
+        cgo_output = None,
         cppopts = [],
         copts = [],
         cxxopts = [],
@@ -64,6 +65,7 @@ def emit_compilepkg(
 
     args = go.builder_args(go, "compilepkg")
     args.add_all(sources, before_each = "-src")
+
     if cover and go.coverdata:
         inputs.append(go.coverdata.data.file)
         args.add("-arc", _archive(go.coverdata))
@@ -110,6 +112,8 @@ def emit_compilepkg(
     if cgo:
         inputs.extend(cgo_inputs.to_list())  # OPT: don't expand depset
         inputs.extend(go.crosstool)
+        outputs.append(cgo_output)
+        args.add("-cgogensrc", cgo_output.path)
         env["CC"] = go.cgo_tools.c_compiler_path
         if cppopts:
             args.add("-cppflags", _quote_opts(cppopts))

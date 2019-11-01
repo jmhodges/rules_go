@@ -78,6 +78,7 @@ def emit_archive(go, source = None):
         cgo = cgo_configure(
             go,
             srcs = split.go + split.c + split.asm + split.cxx + split.objc + split.headers,
+            cgo_output = cgo_generated_src,
             cdeps = source.cdeps,
             cppopts = cppopts,
             copts = copts,
@@ -101,6 +102,7 @@ def emit_archive(go, source = None):
             gc_goopts = source.gc_goopts,
             cgo = True,
             cgo_inputs = cgo.inputs,
+            cgo_output = cgo.output,
             cppopts = cgo.cppopts,
             copts = cgo.copts,
             cxxopts = cgo.cxxopts,
@@ -124,7 +126,6 @@ def emit_archive(go, source = None):
             cgo = False,
             testfilter = testfilter,
         )
-
     data = GoArchiveData(
         name = source.library.name,
         label = source.library.label,

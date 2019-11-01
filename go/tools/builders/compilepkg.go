@@ -43,7 +43,7 @@ func compilePkg(args []string) error {
 	var unfilteredSrcs, coverSrcs multiFlag
 	var deps compileArchiveMultiFlag
 	var importPath, packagePath, nogoPath, packageListPath, coverMode string
-	var outPath, outFactsPath, cgoExportHPath string
+	var outPath, outFactsPath, cgoExportHPath, cgoGenSrc string
 	var testFilter string
 	var gcFlags, asmFlags, cppFlags, cFlags, cxxFlags, objcFlags, objcxxFlags, ldFlags quoteMultiFlag
 	fs.Var(&unfilteredSrcs, "src", ".go, .c, .cc, .m, .mm, .s, or .S file to be filtered and compiled")
@@ -66,6 +66,8 @@ func compilePkg(args []string) error {
 	fs.StringVar(&outFactsPath, "x", "", "The nogo facts file to write")
 	fs.StringVar(&cgoExportHPath, "cgoexport", "", "The _cgo_exports.h file to write")
 	fs.StringVar(&testFilter, "testfilter", "off", "Controls test package filtering")
+	fs.StringVar(&cgoGenSrc, "cgogensrc", "", "The file to store cgo-generated Go files")
+
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -75,6 +77,7 @@ func compilePkg(args []string) error {
 	if importPath == "" {
 		importPath = packagePath
 	}
+
 	cgoEnabled := os.Getenv("CGO_ENABLED") == "1"
 	cc := os.Getenv("CC")
 	outPath = abs(outPath)
@@ -138,7 +141,8 @@ func compilePkg(args []string) error {
 		packageListPath,
 		outPath,
 		outFactsPath,
-		cgoExportHPath)
+		cgoExportHPath,
+		cgoGenSrc)
 }
 
 func compileArchive(
@@ -163,7 +167,8 @@ func compileArchive(
 	packageListPath string,
 	outPath string,
 	outFactsPath string,
-	cgoExportHPath string) error {
+	cgoExportHPath string,
+	cgoGenSrc string) error {
 
 	workDir, cleanup, err := goenv.workDir()
 	if err != nil {
@@ -266,7 +271,11 @@ func compileArchive(
 		// If cgo is not enabled or we don't have other cgo sources, don't
 		// compile .S files.
 		var srcDir string
-		srcDir, goSrcs, objFiles, err = cgo2(goenv, goSrcs, cgoSrcs, cSrcs, cxxSrcs, objcSrcs, objcxxSrcs, nil, hSrcs, packagePath, packageName, cc, cppFlags, cFlags, cxxFlags, objcFlags, objcxxFlags, ldFlags, cgoExportHPath)
+		if cgoGenSrc == "" {
+			return fmt.Errorf("-cgogensrc is a required paramater when building cgo code (this is a rules_go internal error)")
+		}
+
+		srcDir, goSrcs, objFiles, err = cgo2(goenv, goSrcs, cgoSrcs, cSrcs, cxxSrcs, objcSrcs, objcxxSrcs, nil, hSrcs, packagePath, packageName, cc, cppFlags, cFlags, cxxFlags, objcFlags, objcxxFlags, ldFlags, cgoExportHPath, cgoGenSrc)
 		if err != nil {
 			return err
 		}
