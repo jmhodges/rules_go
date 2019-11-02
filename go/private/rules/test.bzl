@@ -69,9 +69,7 @@ def _go_test_impl(ctx):
 
     # Compile the library to test with internal white box tests
     internal_library = go.new_library(go, testfilter = "exclude")
-    print("FIXME _go_test_impl 05 internal_library", internal_library)
     internal_source = go.library_to_source(go, ctx.attr, internal_library, ctx.coverage_instrumented())
-    print("FIXME _go_test_impl 10 internal_source", internal_source)
     internal_archive = go.archive(go, internal_source)
     go_srcs = split_srcs(internal_source.srcs).go
 

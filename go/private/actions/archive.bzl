@@ -69,7 +69,9 @@ def emit_archive(go, source = None):
     importmap = "main" if source.library.is_main else source.library.importmap
     importpath, _ = effective_importpath_pkgpath(source.library)
 
+    cgo_generated_src = None
     if source.cgo and not go.mode.pure:
+        cgo_generated_src = go.declare_file(go, path = "_cgo_imports.go")
         # TODO(jayconrod): do we need to do full Bourne tokenization here?
         cppopts = [f for fs in source.cppopts for f in fs.split(" ")]
         copts = [f for fs in source.copts for f in fs.split(" ")]
@@ -126,6 +128,12 @@ def emit_archive(go, source = None):
             cgo = False,
             testfilter = testfilter,
         )
+
+    archive_srcs = []
+    archive_srcs.extend(source.srcs)
+    if cgo_generated_src != None:
+        archive_srcs.append(cgo_generated_src)
+
     data = GoArchiveData(
         name = source.library.name,
         label = source.library.label,
@@ -135,7 +143,7 @@ def emit_archive(go, source = None):
         pathtype = source.library.pathtype,
         file = out_lib,
         export_file = out_export,
-        srcs = as_tuple(source.srcs),
+        srcs = as_tuple(archive_srcs),
         orig_srcs = as_tuple(source.orig_srcs),
         data_files = as_tuple(data_files),
         searchpath = searchpath,
