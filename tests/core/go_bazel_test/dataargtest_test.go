@@ -12,38 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build !windows
 package main
 
 import (
 	"flag"
-	"log"
 	"os"
-	"path/filepath"
 	"testing"
 
+	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/bazelbuild/rules_go/go/tools/bazel_testing"
 )
 
 var (
 	binaryPath = flag.String("binaryPath", "", "")
-	pwd        string
 )
 
 func TestMain(m *testing.M) {
-	wd, err := os.Getwd()
-	if err != nil {
-		log.Fatalf("unable to get current working directory: %s", err)
-	}
-	pwd = wd
 	bazel_testing.TestMain(m, bazel_testing.Args{})
 }
 
 // Tests that go_bazel_test keeps includes data files correctly and doesn't mess
 // up on `args` that include `$(location ...)` calls.
 func TestGoldenPath(t *testing.T) {
-	_, err := os.Stat(filepath.Join(pwd, *binaryPath))
+	bp, err := bazel.Runfile(*binaryPath)
 	if err != nil {
-		t.Errorf("unable to open Go binary file: %s", err)
+		t.Fatalf("unable to get the runfile path %#v: %s", *binaryPath, err)
+	}
+	_, err = os.Stat(bp)
+	if err != nil {
+		t.Fatalf("unable to stat Go binary file: %s", err)
 	}
 }
