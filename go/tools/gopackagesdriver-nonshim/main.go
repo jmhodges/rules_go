@@ -406,10 +406,7 @@ func packagesFromBazelTargets(mode packages.LoadMode, buildFlags []string, bazel
 	if err != nil {
 		return err
 	}
-	targMap := make(map[string]bool, len(bazelTargets))
-	for _, t := range bazelTargets {
-		targMap[t] = true
-	}
+
 	log.Println("FIXME packagesFromBazelTargets 45:", mode, files)
 	for fp, _ := range files {
 		resp, err := parseAspectResponse(fp)
@@ -417,9 +414,6 @@ func packagesFromBazelTargets(mode packages.LoadMode, buildFlags []string, bazel
 			return fmt.Errorf("unable to parse JSON response in file %#v in returened aspect: %s", fp, err)
 		}
 		respID := packageID(resp.ID)
-		if !targMap[respID] {
-			// Got a top-level package for a target that wasn't one of the ones we asked for. This means we picked up either a
-		}
 		_, found := pkgs[respID]
 		if found {
 			continue

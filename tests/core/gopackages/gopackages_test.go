@@ -390,7 +390,7 @@ func TestPatterns(t *testing.T) {
 					CompiledGoFiles: []string{
 						abs("hascgo.go"),
 						abs("nocgo.go"),
-						"someextra",
+						abs("_cgo_imports.go"),
 					},
 				},
 			},
@@ -434,9 +434,9 @@ func TestPatterns(t *testing.T) {
 	}
 }
 
-type shaOrError struct {
-	Sha string
-	Err error
+type contentsOrError struct {
+	Contents string
+	Err      error
 }
 
 var pkgCmpOpt = cmp.FilterPath(
@@ -448,12 +448,23 @@ var pkgCmpOpt = cmp.FilterPath(
 		return false
 	},
 	cmp.Transformer(
-		"TurnFilePathsIntoSha256OfContents",
-		func(xs []string) []shaOrError {
-			out := make([]shaOrError, len(xs))
+		"TurnFilePathsIntoFileContents",
+		func(xs []string) []contentsOrError {
+			out := make([]contentsOrError, len(xs))
 			for i, x := range xs {
-				sum, err := shasum(resolveLink(x))
-				out[i] = shaOrError{Sha: fmt.Sprintf("%x", sum), Err: err}
+				// _cgo_imports.go is created by compilepkg's cgo code and won't
+				// exist on disk before the compile is made. That means we can't
+				// do our usual transformation on the expected side. The
+				// _cgo_imports.go generated will be platform (and, I believe Go
+				// version) specific, so let's skip trying to maintain that. If
+				// that turns to be easier than I think, we can rip this back
+				// out.
+				if filepath.Base(x) == "_cgo_imports.go" {
+					out[i] = contentsOrError{Contents: "fakecgosha", Err: nil}
+					continue
+				}
+				contents, err := ioutil.ReadFile(resolveLink(x))
+				out[i] = contentsOrError{Contents: string(contents), Err: err}
 			}
 			return out
 		},
