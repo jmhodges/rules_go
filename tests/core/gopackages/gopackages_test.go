@@ -43,7 +43,7 @@ func TestMain(m *testing.M) {
 		Nogo: "@//:gopackagesdriver_nogo",
 		Main: `
 -- BUILD.bazel --
-load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library", "nogo")
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library", "go_test", "nogo")
 
 nogo(
     name = "gopackagesdriver_nogo",
@@ -103,6 +103,10 @@ go_binary(
     embed = [":embedlib"],
     visibility = ["//visibility:public"],
 )
+go_test(
+    name = "hello_use_test",
+    srcs = ["hello_use_test.go"],
+)
 -- hello.go --
 package hello
 
@@ -141,6 +145,16 @@ import "fakeimportpath/hello"
 
 func K() string {
 	return hello.A()
+}
+-- hello_use_test.go --
+package hello_use
+
+import "testing"
+
+func TestK(t *testing.T) {
+	if K() != "hello is 12" {
+		t.Errorf("welp")
+	}
 }
 -- simplebin.go --
 package main
@@ -332,12 +346,6 @@ func TestPatterns(t *testing.T) {
 				},
 			},
 		},
-		// FIXME requires better handling of embed
-		// {
-		// 	[]string{"//:embedbin"},
-		// 	packages.NeedName | packages.NeedFiles | packages.NeedImports | packages.NeedDeps,
-		// 	[]*packages.Package{},
-		// },
 		{
 			[]string{"file=embedme.go"},
 			packages.NeedName | packages.NeedFiles | packages.NeedImports | packages.NeedDeps,
@@ -408,6 +416,19 @@ func TestPatterns(t *testing.T) {
 				},
 			},
 		},
+		// FIXME enable test
+		// {
+		// 	[]string{"file=hello_use_test.go"},
+		// 	packages.NeedName | packages.NeedFiles,
+		// 	[]*packages.Package{
+		// 		{
+		// 			ID:      "//:hello_use_test",
+		// 			Name:    "hello_use [test]",
+		// 			PkgPath: "fakeimportpath/hello_use",
+		// 			GoFiles: []string{abs("hello_use_test.go")},
+		// 		},
+		// 	},
+		// },
 	}
 
 	for tcInd, tc := range testcases {
@@ -422,13 +443,13 @@ func TestPatterns(t *testing.T) {
 				}
 				pkgs, err := packages.Load(cfg, tc.inputPatterns...)
 				if err != nil {
-					t.Fatalf("unable to packages.Load: %s", err)
+					t.Fatalf("unable to packages.Load(mode: %d, patterns: %s): %s", tc.mode, tc.inputPatterns, err)
 				}
 				if len(pkgs) != len(tc.outputPkgs) {
 					t.Errorf("too many packages returned: want %d, got %d", len(tc.outputPkgs), len(pkgs))
 				}
 				if !cmp.Equal(tc.outputPkgs, pkgs, pkgCmpOpt) {
-					t.Errorf("packages from patterns %s didn't match, diff: %s", tc.inputPatterns, cmp.Diff(tc.outputPkgs, pkgs, pkgCmpOpt))
+					t.Errorf("packages from patterns %s, mode %d didn't match, diff: %s", tc.inputPatterns, tc.mode, cmp.Diff(tc.outputPkgs, pkgs, pkgCmpOpt))
 				}
 			})
 	}

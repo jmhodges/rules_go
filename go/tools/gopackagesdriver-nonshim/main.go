@@ -307,12 +307,12 @@ const goPkgsDriverOutputGroup = "gopackagesdriver_data"
 func packagesFromPatterns(req *driverRequest, targets []string) (*driverResponse, error) {
 	log.Println("FIXME packagesFromPatterns 001: targets", targets)
 	bazelTargets := make([]packageID, 0, len(targets))
-	var stdlibPatterns []string
+	var stdlibPatterns []packagePath
 	for _, targ := range targets {
 		if imp, ok := stdlibmaps.StdlibBazelLabelToImportPath[targ]; ok {
-			stdlibPatterns = append(stdlibPatterns, imp)
+			stdlibPatterns = append(stdlibPatterns, packagePath(imp))
 		} else if _, ok := stdlibmaps.StdlibImportPathToBazelLabel[targ]; ok {
-			stdlibPatterns = append(stdlibPatterns, targ)
+			stdlibPatterns = append(stdlibPatterns, packagePath(targ))
 		} else {
 			bazelTargets = append(bazelTargets, packageID(targ))
 		}
@@ -392,9 +392,19 @@ func packagesFromPatterns(req *driverRequest, targets []string) (*driverResponse
 	}, nil
 }
 
-// packageID is used to distinguish Package.ID from Package.PkgPath here. It's a
-// bazel label and maybe we should call it "packageLabel", instead?
+// packageID is a Package.ID in bazel-land and distinguishes Package.ID
+// strings from Package.PkgPath strings here. It's a bazel label and maybe we
+// should call it "packageLabel", instead?
 type packageID string
+
+// packagePath is a import path of a Package, which in go/packages lingo is a
+// Package.PkgPath. It's used to distinguish strings representing Package.IDs
+// (packageID) and Package.PkgPaths.
+//
+// Unlike in normal Go tooling, packagePaths are not globally unique even when
+// handling vendored packages. Specifically, all bare go_test calls will have
+// the importpath `testmain` on their GoArchiveData.
+type packagePath string
 
 func packagesFromBazelTargets(mode packages.LoadMode, buildFlags []string, bazelTargets []packageID, pkgs map[packageID]*packages.Package, roots map[packageID]bool) error {
 	pbuf, err := bazelBuildAspects(mode, buildFlags, bazelTargets)
@@ -438,9 +448,9 @@ func packagesFromBazelTargets(mode packages.LoadMode, buildFlags []string, bazel
 	return nil
 }
 
-func packagesFromStdlibPatterns(req *driverRequest, stdlibPatterns []string, pkgs map[packageID]*packages.Package, roots map[packageID]bool) error {
+func packagesFromStdlibPatterns(req *driverRequest, stdlibPatterns []packagePath, pkgs map[packageID]*packages.Package, roots map[packageID]bool) error {
 	for _, patt := range stdlibPatterns {
-		_, found := pkgs[packageID(stdlibmaps.StdlibImportPathToBazelLabel[patt])]
+		_, found := pkgs[packageID(stdlibmaps.StdlibImportPathToBazelLabel[string(patt)])]
 		if found {
 			continue
 		}
@@ -479,9 +489,9 @@ type aspectResponse struct {
 	OtherFiles      []string `json:"other_files"`       // relative file paths
 	ExportFile      string   `json:"export_file"`       // relative file path
 
-	// DepsImportPaths is the Go import paths of the bazel targets listed in the
-	// deps field of the target queried for to their label.
-	DepImportPathsToLabels map[string]string `json:"dep_importpaths_to_labels"`
+	// DepsLabelsToImportPaths is the bazel targets listed in the deps field of
+	// the target mapped to the importpath of that target.
+	DepLabelsToImportPaths map[packageID]packagePath `json:"dep_labels_to_importpaths"`
 
 	// Imports is the aspectResponses of the packages that are bazel
 	// dependencies of this package. Does not, currently, include standard
@@ -507,18 +517,17 @@ func aspectResponseAddFullPackagesToImports(resp *aspectResponse, pkg *packages.
 }
 
 func addFullPackagesToImports(imports map[packageID]*aspectResponse, opkg *packages.Package, pkgs map[packageID]*packages.Package) error {
-	log.Println("FIXME addFullPackagesToImports 01 opkg.ID:", opkg.ID, "GoFiles count:", len(opkg.GoFiles))
 	// FIXME Refactor this entire func with the main parseAspectResponse loop
 	for _, fp := range opkg.GoFiles {
 		// FIXME all errors in here should probably be Errors field entries?
 		// FIXME should return packageIDs?
-		labels, err := findStdlibImportPathsToBazelLabelsInFile(fp)
+		labels, err := findStdlibBazelLabelsToImportPathsInFile(fp)
 		if err != nil {
 			return fmt.Errorf("error while trying to parse %#v for imports of standard libs: %s", fp, err)
 		}
 
-		for imp, label := range labels {
-			if _, found := opkg.Imports[imp]; found {
+		for label, imp := range labels {
+			if _, found := opkg.Imports[string(imp)]; found {
 				continue
 			}
 			spkg, found := pkgs[label]
@@ -530,7 +539,7 @@ func addFullPackagesToImports(imports map[packageID]*aspectResponse, opkg *packa
 				}
 				pkgs[label] = spkg
 			}
-			opkg.Imports[imp] = spkg
+			opkg.Imports[string(imp)] = spkg
 		}
 	}
 	log.Println("FIXME addFullPackagesToImports 50 labelsToJSONFiles:", imports, "opkg.Imports:", opkg.Imports)
@@ -552,10 +561,10 @@ func addFullPackagesToImports(imports map[packageID]*aspectResponse, opkg *packa
 
 // FIXME remove returned error and make it an Errors field thing
 func aspectResponseAddIDOnlyPackagesToImports(resp *aspectResponse, pkg *packages.Package) error {
-	return addIDOnlyPackagesToImports(resp.DepImportPathsToLabels, pkg)
+	return addIDOnlyPackagesToImports(resp.DepLabelsToImportPaths, pkg)
 }
 
-func addIDOnlyPackagesToImports(depImpToLabels map[string]string, pkg *packages.Package) error {
+func addIDOnlyPackagesToImports(depLabelToImps map[packageID]packagePath, pkg *packages.Package) error {
 	log.Println("FIXME aspectResponseAddIDOnlyPackagesToImports 1", pkg.GoFiles)
 	// FIXME no longer needed since we always set a non-nil Imports now?
 	if pkg.Imports == nil {
@@ -563,20 +572,20 @@ func addIDOnlyPackagesToImports(depImpToLabels map[string]string, pkg *packages.
 	}
 	for _, fp := range pkg.GoFiles {
 		// FIXME all errors in here should probably be Errors field entries?
-		labels, err := findStdlibImportPathsToBazelLabelsInFile(fp)
+		labels, err := findStdlibBazelLabelsToImportPathsInFile(fp)
 		if err != nil {
 			return fmt.Errorf("error while trying to parse %#v for imports of standard libs: %s", fp, err)
 		}
 
-		for imp, label := range labels {
-			if _, found := pkg.Imports[imp]; found {
+		for label, imp := range labels {
+			if _, found := pkg.Imports[string(imp)]; found {
 				continue
 			}
-			pkg.Imports[imp] = &packages.Package{ID: string(label)}
+			pkg.Imports[string(imp)] = &packages.Package{ID: string(label)}
 		}
 	}
-	for imp, label := range depImpToLabels {
-		pkg.Imports[imp] = &packages.Package{ID: label}
+	for label, imp := range depLabelToImps {
+		pkg.Imports[string(imp)] = &packages.Package{ID: string(label)}
 	}
 	log.Println("FIXME aspectResponseAddIDOnlyPackagesToImports 100", pkg.GoFiles, pkg.Imports)
 	return nil
@@ -613,16 +622,16 @@ func absolutizeFilePaths(pwd string, fps []string) []string {
 var stdlibExportPrefix = filepath.Join(os.Getenv("GOROOT"), "pkg", os.Getenv("GOOS")+"_"+os.Getenv("GOARCH"))
 
 // FIXME not actually working. this is for gopls.
-func buildStdlibPackageFromImportPath(imp string) (*packages.Package, error) {
+func buildStdlibPackageFromImportPath(imp packagePath) (*packages.Package, error) {
 	// FIXME do this out for real (with the go list driver?)
-	ind := strings.LastIndex(imp, "/")
+	ind := strings.LastIndex(string(imp), "/")
 	if ind == -1 {
 		ind = 0
 	} else {
 		ind++
 	}
-	name := imp[ind:]
-	dir := filepath.Join(os.Getenv("GOROOT"), "src", imp)
+	name := string(imp)[ind:]
+	dir := filepath.Join(os.Getenv("GOROOT"), "src", string(imp))
 	fis, err := ioutil.ReadDir(dir)
 	// FIXME tag on to Errors, instead
 	if err != nil {
@@ -645,17 +654,17 @@ func buildStdlibPackageFromImportPath(imp string) (*packages.Package, error) {
 	label := stdlibBazelLabel(imp)
 	// FIXME add Export
 	return &packages.Package{
-		ID:              label,
+		ID:              string(label),
 		Name:            name,
-		PkgPath:         imp,
+		PkgPath:         string(imp),
 		GoFiles:         goFiles,
 		CompiledGoFiles: compiledGoFiles,
 		// FIXME better way to generate this?
-		ExportFile: filepath.Join(stdlibExportPrefix, imp),
+		ExportFile: filepath.Join(stdlibExportPrefix, string(imp)),
 	}, nil
 }
 
-func findStdlibImportPathsToBazelLabelsInFile(fp string) (map[string]packageID, error) {
+func findStdlibBazelLabelsToImportPathsInFile(fp string) (map[packageID]packagePath, error) {
 	fset := token.NewFileSet()
 
 	// FIXME apply build tags here.
@@ -663,19 +672,19 @@ func findStdlibImportPathsToBazelLabelsInFile(fp string) (map[string]packageID, 
 	if err != nil {
 		return nil, err
 	}
-	impToLabels := make(map[string]packageID)
+	impToLabels := make(map[packageID]packagePath)
 	log.Println("FIXME findStdlibImportPathsToBazelLabelsInFile 1", fp, ", Imports:", f.Imports)
 	for _, impSpec := range f.Imports {
 		imp := strings.Trim(impSpec.Path.Value, `"`)
 		log.Println("FIXME findStdlibBazelLabelsInFile 20", imp)
 		if label, found := stdlibmaps.StdlibImportPathToBazelLabel[imp]; found {
-			impToLabels[imp] = packageID(label)
+			impToLabels[packageID(label)] = packagePath(imp)
 		}
 	}
 	log.Println("FIXME findStdlibImportPathsToBazelLabelsInFile 100", impToLabels)
 	return impToLabels, nil
 }
 
-func stdlibBazelLabel(importPath string) string {
-	return fmt.Sprintf(stdlibmaps.StdlibBazelLabelFormat, importPath)
+func stdlibBazelLabel(importPath packagePath) packageID {
+	return packageID(fmt.Sprintf(stdlibmaps.StdlibBazelLabelFormat, importPath))
 }

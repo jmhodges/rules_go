@@ -69,7 +69,6 @@ GoPackagesFilesProvider = provider(
 )
 
 def _gopackagesdriver_export_aspect_impl(target, ctx):
-    source = target[GoSource] if GoSource in target else None
     if not GoLibrary in target:
         # Not a rule we can do anything with
         return None
@@ -163,7 +162,7 @@ def _basic_driver_response(ctx, target, source, library):
     label_string = _label_to_string(target.label)
     deps = {}
     for deptarg in ctx.rule.attr.deps:
-        deps[deptarg[GoLibrary].importpath] = _label_to_string(deptarg.label)
+        deps[_label_to_string(deptarg.label)] = deptarg[GoLibrary].importpath
         
     return {
         "id": label_string,
@@ -172,7 +171,7 @@ def _basic_driver_response(ctx, target, source, library):
                                        # the other _export aspect?
         "go_files": go_srcs,
         "other_files": nongo_srcs,
-        "dep_importpaths_to_labels": deps,
+        "dep_labels_to_importpaths": deps,
     }
 
 def _export_driver_response(go, target_label, archive):
@@ -223,9 +222,8 @@ gopackagesdriver_export_aspect = aspect(
 def _debug_impl(target, ctx):
     go = go_context(ctx, ctx.rule.attr)
 
-    print("FIXME 001 GoSource", target[GoSource])
-    print("FIXME 002 GoArchive", target[GoArchive])
-    print("FIXME 003 GoArchiveData", target[GoArchive].data)
+    print("FIXME 001", target)
+    print("FIXME 002", target[GoArchive].data)
     # foobar = ctx.actions.declare_file("foobar")
 
     # ctx.actions.run_shell(
@@ -235,8 +233,8 @@ def _debug_impl(target, ctx):
     #     command = ctx.expand_location("echo $(execpath @go_sdk//:builtin/builtin.go) > foobar && echo FIXME4"),
     #     env = go.env,
     # )
-    print("FIXME 050 libs", go.sdk.libs)
-    print("FIXME 051 srcs", go.sdk.srcs)
+    # print("FIXME 050 libs", go.sdk.libs)
+    # print("FIXME 051 srcs", go.sdk.srcs)
     return [] # [OutputGroupInfo(welp=[foobar])]
 
 debug_aspect = aspect( # FIXME delete this aspect
