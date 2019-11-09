@@ -103,9 +103,16 @@ go_binary(
     embed = [":embedlib"],
     visibility = ["//visibility:public"],
 )
+
 go_test(
     name = "hello_use_test",
     srcs = ["hello_use_test.go"],
+    deps = [":hello_use"],
+)
+
+go_test(
+    name = "no_deps_test",
+    srcs = ["simple_test.go"]
 )
 -- hello.go --
 package hello
@@ -171,6 +178,14 @@ import "fmt"
 
 func main() {
 	fmt.Println("Hello, embedded library World!")
+}
+-- simple_test.go --
+package main
+
+import "testing"
+
+func TestGood(t *testing.T) {
+	t.Skip()
 }
 `,
 	})
@@ -416,19 +431,30 @@ func TestPatterns(t *testing.T) {
 				},
 			},
 		},
-		// FIXME enable test
-		// {
-		// 	[]string{"file=hello_use_test.go"},
-		// 	packages.NeedName | packages.NeedFiles,
-		// 	[]*packages.Package{
-		// 		{
-		// 			ID:      "//:hello_use_test",
-		// 			Name:    "hello_use [test]",
-		// 			PkgPath: "fakeimportpath/hello_use",
-		// 			GoFiles: []string{abs("hello_use_test.go")},
-		// 		},
-		// 	},
-		// },
+		{
+			[]string{"file=hello_use_test.go"},
+			packages.NeedName | packages.NeedFiles,
+			[]*packages.Package{
+				{
+					ID:      "//:hello_use_test",
+					Name:    "hello_use [test]",
+					PkgPath: "fakeimportpath/hello_use",
+					GoFiles: []string{abs("hello_use_test.go")},
+				},
+			},
+		},
+		{
+			[]string{"//:hello_use_test"},
+			packages.NeedName | packages.NeedFiles,
+			[]*packages.Package{
+				{
+					ID:      "//:hello_use_test",
+					Name:    "hello_use [test]",
+					PkgPath: "fakeimportpath/hello_use",
+					GoFiles: []string{abs("hello_use_test.go")},
+				},
+			},
+		},
 	}
 
 	for tcInd, tc := range testcases {
