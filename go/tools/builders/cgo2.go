@@ -149,7 +149,7 @@ func cgo2(goenv *env, goSrcs, cgoSrcs, cSrcs, cxxSrcs, objcSrcs, objcxxSrcs, sSr
 	}
 
 	if cgoExportHPath != "" {
-		if err := copyFile(filepath.Join(workDir, "_cgo_export.h"), cgoExportHPath); err != nil {
+		if err := copyFile(filepath.Join(genOutDir, "_cgo_export.h"), cgoExportHPath); err != nil {
 			return "", nil, nil, err
 		}
 	}
