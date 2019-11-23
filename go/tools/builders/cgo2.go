@@ -23,9 +23,8 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"log"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 )
@@ -126,7 +125,7 @@ func cgo2(goenv *env, goSrcs, cgoSrcs, cSrcs, cxxSrcs, objcSrcs, objcxxSrcs, sSr
 	}
 	hdrIncludes = append(hdrIncludes, "-iquote", workDir) // for _cgo_export.h
 
-	args := goenv.goTool("cgo", "-srcdir", srcDir, "-objdir", genOutDir)
+	args := goenv.goTool("cgo", "-srcdir", srcDir, "-objdir", workDir)
 	if packagePath != "" {
 		args = append(args, "-importpath", packagePath)
 	}
@@ -139,24 +138,10 @@ func cgo2(goenv *env, goSrcs, cgoSrcs, cSrcs, cxxSrcs, objcSrcs, objcxxSrcs, sSr
 		return "", nil, nil, err
 	}
 
-	var genSrcPaths []string
-	fis, err := ioutil.ReadDir(genOutDir)
-	if err != nil {
-		return "", nil, nil, err
-	}
-	for _, fi := range fis {
-		genSrcPaths = append(genSrcPaths, path.Join(genOutDir, fi.Name()))
-	}
-
 	if cgoExportHPath != "" {
-		if err := copyFile(filepath.Join(genOutDir, "_cgo_export.h"), cgoExportHPath); err != nil {
+		if err := copyFile(filepath.Join(workDir, "_cgo_export.h"), cgoExportHPath); err != nil {
 			return "", nil, nil, err
 		}
-	}
-
-	_, err = gatherSrcs(workDir, genSrcPaths)
-	if err != nil {
-		return "", nil, nil, err
 	}
 
 	genGoSrcs := make([]string, 1+len(cgoSrcs))
@@ -215,6 +200,37 @@ func cgo2(goenv *env, goSrcs, cgoSrcs, cSrcs, cxxSrcs, objcSrcs, objcxxSrcs, sSr
 	goBases, err := gatherSrcs(workDir, goSrcs)
 	if err != nil {
 		return "", nil, nil, err
+	}
+
+	var genSrcs []string
+	genSrcs = append(genSrcs, genGoSrcs...)
+	genSrcs = append(genSrcs, genCSrcs...)
+	var resolveLink func(string) (string, error)
+	resolveLink = func(fp string) (string, error) {
+		for {
+			fi, err := os.Lstat(fp)
+			if err != nil {
+				return "", err
+			}
+			if fi.Mode()&os.ModeSymlink == 0 {
+				return fp, nil
+			}
+			fp, err = os.Readlink(fi.Name())
+			if err != nil {
+				return "", err
+			}
+		}
+	}
+	for _, genSrcLink := range genSrcs {
+		genSrc, err := resolveLink(genSrcLink)
+		if err != nil {
+			return "", nil, nil, err
+		}
+		log.Println("FIXME genSrcLink:", genSrcLink, "genSrc:", genSrc)
+		err = copyFile(genSrc, filepath.Join(genOutDir, filepath.Base(genSrc)))
+		if err != nil {
+			return "", nil, nil, err
+		}
 	}
 
 	allGoSrcs = make([]string, len(goSrcs)+len(genGoSrcs))
